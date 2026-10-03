@@ -1067,7 +1067,11 @@ def compile_asm(src: str) -> str:
 
 
 def build(flint_path: str, out_path: str):
-    """编译 .fl 文件并链接为可执行文件(gcc 仅做汇编与链接)。"""
+    """编译 .fl 文件并链接为可执行文件(gcc 仅做汇编与链接)。
+
+    Windows 通常没有预装 gcc: 缺失时抛 AsmError 中文提示, 不再裸抛
+    FileNotFoundError(开箱即挂)。VM 模式零依赖, 不受影响。
+    """
     with open(flint_path, encoding="utf-8") as f:
         src = f.read()
     asm_text = compile_asm(src)
@@ -1077,9 +1081,17 @@ def build(flint_path: str, out_path: str):
     try:
         cc = os.environ.get("CC", "gcc")
         cmd = [cc, "-no-pie", "-O2", "-o", out_path, asm_path]
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise AsmError(
+                "未找到汇编器/链接器 '%s' (x86-64 原生后端需要 gcc)。\n"
+                "  - Linux/macOS: 安装 gcc 即可\n"
+                "  - Windows: 安装 MinGW-w64 后设置 CC 环境变量指向 gcc.exe\n"
+                "  - 或改用零依赖的 VM 模式: python flint.py run <file.fl>" % cc
+            ) from None
         if r.returncode != 0:
-            raise AsmError(f"gcc 汇编/链接失败:\n{r.stderr}")
+            raise AsmError("gcc 汇编/链接失败:\n" + r.stderr)
     finally:
         os.unlink(asm_path)
     return out_path

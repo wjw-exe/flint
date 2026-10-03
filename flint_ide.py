@@ -22,7 +22,14 @@ import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
-sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "flint-lang"))
+# 兼容两种布局: 仓库/Windows 包内 flint-lang 与本目录同级; Linux 开发布局 flint-lang 与上级目录同级
+for _cand in (
+    os.path.join(_HERE, "flint-lang"),
+    os.path.join(os.path.dirname(_HERE), "flint-lang"),
+):
+    if os.path.isdir(_cand):
+        sys.path.insert(0, _cand)
+        break
 
 try:
     from PyQt6.QtCore import Qt, QThread, pyqtSignal, QRect, QSize

@@ -134,45 +134,53 @@ def main() -> i32:
 - 优先级与 Python 一致：`not` > 比较 > `and` > `or`
 - 内置函数：`print(a, b, ...)`（自动换行, 空格分隔）、`input()`、`len(xs|s)`、`abs(x)`
 
-## 运行
+## 快速开始
 
-```bash
-# 需要与 flint-lang 同级存放(共用其汇编器与虚拟机)
-python3 flint.py run examples/fib.fl
-python3 flint.py run examples/lists.fl
-python3 flint.py run examples/pythonic.fl
-python3 flint.py run examples/break_continue.fl
-python3 flint.py asm examples/fib.fl                     # 查看编译出的汇编
+### Windows（零依赖, 开箱即用）
 
-python3 flint.py run --native examples/fib.fl            # 原生后端: 不走 VM
-python3 flint.py native examples/fib.fl                  # 生成可执行文件(默认同名)
-python3 tests/run_tests.py                               # 38 项端到端测试(VM 后端)
-python3 tests/native_tests.py                            # 38 项原生后端测试
+```bat
+py flint.py run examplesib.fl          :: VM 模式 → 610
+py flint.py run examplesubble_sort.fl
+py flint.py asm examplesib.fl          :: 查看编译出的 VM 汇编
+py smoke_tests.py                        :: 仓库自检: 10 个示例全部通过
 ```
 
-## 原生后端（Python 只做编译期）
+图形 IDE：`pip install PyQt6` 后 `py flint_ide.py examples\lists.fl`；
+一键构建免 Python 环境包（`flint.exe` + `flint-ide.exe`）：双击 `build.bat`。
 
-`--native` 把同一份源码经同一前端（词法→语法→类型检查→AST）翻译成 **C 源码**，再用
-`gcc -O2 -fwrapv` 编译为**原生可执行文件**——运行时完全不经过 Python，这正是
-"Python 只负责编译成汇编"的落地形态（C 只是中间产物，也可视为"汇编的下一级"）。
+### Linux / macOS
 
-**语义与 VM 后端完全一致**（同一 AST、同一类型系统、同一运行时行为）：
-- i32 32 位回绕（`-fwrapv` 保证与 VM 相同的溢出行为）
-- 列表内存布局一致：len 在块底、元素向上（C 数组 `[len][e0][e1]...`）
-- 越界/负索引修正 → 同 TRAP 1；除零/零步长 → 同 TRAP 2；地板除符号修正一致
-- `tests/native_tests.py` 38 项：全部示例 VM vs 原生**逐字节一致** + TRAP + 语义边界
+```bash
+python3 flint.py run examples/fib.fl
+python3 flint.py run --native examples/fib.fl   # x86-64 汇编后端(需要 gcc)
+python3 flint.py native examples/fib.fl -o fib  # 生成可执行文件
+python3 smoke_tests.py
+```
 
-### 实测性能（同一程序、同机）
+## 原生后端（x86-64 汇编, 需要 gcc）
 
-| 基准 | VM 后端 | 原生后端 | 加速 |
-|---|---|---|---|
-| fib(15) 递归 | 70 ms | **0.82 ms** | ~85× |
-| sum 0..999999 | 20.4 s | **1.3 ms** | ~15,000× |
-| 列表遍历 8000 | 334 ms | **0.95 ms** | ~350× |
-| 动态步长 range(0,1e6,3) | 8.2 s | **0.95 ms** | ~8,600× |
+`run --native` / `native` 由 `asm.py` 把同一份源码经同一前端（词法→语法→类型检查→AST）
+**直接生成 x86-64 AT&T 汇编**，再交给 gcc 只做最后一步"汇编 + 链接"（`gcc -no-pie -O2`）——
+**不经过 C 或任何中间语言**。运行时与 Python 完全无关（v2.2 起旧 C 后端已移除）。
 
-对照：CPython 同逻辑 sum 0..999999 = 26.4 ms → 原生后端比 CPython **快约 20 倍**。
-（gcc 编译开销约 150 ms，一次性；运行秒级以下。）
+- **Linux/macOS**：系统自带 gcc 即可。
+- **Windows**：默认没有 gcc。安装 MinGW-w64（如 `winget install BrechtSanders.WinLibs.POSIX.Mingw-w64`），
+  把 `gcc.exe` 加入 PATH，或用环境变量 `CC` 指向它。
+- **没有 gcc 时不会崩溃**：VM 模式（`run`）完全可用；`--native` 会给出清晰中文提示并返回错误码。
+
+**语义与 VM 后端完全一致**（同一 AST、同一类型系统）：
+- i32 32 位回绕、`/` 向零截断、`//` 地板除、移位 &31 ——与 VM 逐字节一致
+- 越界 → TRAP 1（exit 1）；除零/零步长 → TRAP 2（exit 2）
+
+### 原生后端实测性能（Linux, 2026-10, 取最佳）
+
+| 基准 | Flint x86-64 | C (gcc -O2) | Python 3.12 | 说明 |
+|---|---|---|---|---|
+| fib(35) 递归 | 76.8 ms | 14.6 ms | 843 ms | 比 Python 快 ~11×; 直译无寄存器分配 |
+| sum 0..1e8 (i32 回绕) | 113.7 ms | 29.7 ms | 1050 ms | 比 Python 快 ~9× |
+| 列表遍历 8000 | 1.11 ms | 1.14 ms | — | 与 C 持平 |
+
+（乱序环境测量, 看倍数不看绝对值；每行数据均为指令数与输出双重校验。）
 
 ## 编译管线
 
@@ -202,12 +210,14 @@ AST
 
 ```
 带类型 AST
-   │  ④' native.py  AST → C 源码(类型直映 int32_t/指针, 语义与 VM 一致)
+   │  ④' asm.py  AST → x86-64 AT&T 汇编(直译, 无寄存器分配)
    ▼
-C 源码 (可读, 可人工检查)
-   │  ⑤' gcc -O2 -fwrapv  原生编译
+AT&T 汇编 (可读, 可人工检查)
+   │  ⑤' gcc -no-pie -O2  仅做汇编与链接
    ▼
 可执行文件 (运行时与 Python 无关)
+```
+
 ```
 
 ## 与 Python 的刻意差异（为了性能）
@@ -226,23 +236,21 @@ v2 编译到与 v1 完全相同的 Flint-ASM/虚拟机，而 Flint-ASM 已通过
 ## 项目结构
 
 ```
-flint-v2/
-├── flint.py          CLI 入口(run / asm)
-├── flint_ide.py      专属 IDE (PyQt6, 见 README-IDE.md)
-├── lexer.py          缩进感知词法
-├── parser.py         递归下降解析 → AST
-├── typecheck.py      静态类型检查
-├── codegen.py        AST → VM 汇编(编译期优化)
-├── asm.py            **v2.2 x86-64 汇编后端**: AST → AT&T 汇编 → gcc 汇编链接 → 可执行
-├── examples/         hello / fib / loops / prime / echo / lists / break_continue / pythonic / v21_ext
-├── tests/run_tests.py  38 项端到端测试(VM)
-├── tests/asm_tests.py  12 项端到端测试(汇编后端, 与 VM 输出逐字节对比)
-└── README.md
+flint-windows/             (即本仓库)
+├── flint.py               CLI: run / asm / native (+ --native)
+├── flint_ide.py           专属 IDE (PyQt6)
+├── lexer.py parser.py typecheck.py codegen.py   前端: 缩进词法 → AST → 静态类型 → VM 汇编
+├── asm.py                 x86-64 汇编后端: AST → AT&T 汇编 → gcc 汇编链接 → 可执行
+├── smoke_tests.py         开箱自检: 10 个示例 VM 模式全跑 + 断言
+├── flint-lang/            底层库: 32 位 ISA / 汇编器 / 虚拟机(17 项测试)
+├── examples/              hello / fib / loops / prime / echo / lists / break_continue / bubble_sort / pythonic / v21_ext
+├── build.bat              Windows 一键构建 flint.exe + flint-ide.exe(免 Python)
+└── run.bat                启动图形 IDE
 
-> v2.2 起 `flint.py run --native` / `flint.py native` 走 **asm.py 汇编后端**;
-> 旧 C 后端(native.py)已按用户要求移除, 归档于 `docs/archived/native_c_backend.py`。
+> 顶层开发验证: run_tests 38 + asm_tests 12 + IDE 9 + flint-lang 17 = **76 项全绿**
+> (测试套件随开发仓库维护; 本仓库以 `smoke_tests.py` 做开箱自检)。
+> v2.2 起 `run --native` / `native` 走 asm.py 汇编后端, 旧 C 后端(native.py)已移除。
 ```
-
 ## 专属 IDE
 
 `flint_ide.py` 是为本语言打造的 PyQt6 桌面 IDE：语法高亮、行号、一键编译运行、
