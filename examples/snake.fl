@@ -1,0 +1,196 @@
+# 贪吃蛇 (Snake) — Flint v2.2 文本版
+#
+# 棋盘 16x12, 数字渲染: 0=空格 1=蛇身 2=蛇头 3=食物 4=墙
+# 操作: w=上 a=左 s=下 d=右 q=退出 (输入 EOF 也结束)
+# 状态共享: 全局定长列表 st/snake/buf (Flint 全局变量只读, 列表内容可变)
+
+# ---- 全局状态 ----
+# st: 0=head指针 1=tail指针 2=蛇长 3=方向(0右1下2左3上)
+#     4=随机种子 5=食物x 6=食物y 7=得分 8=存活(1活0死)
+st: list[i32; 12] = []
+snake: list[i32; 384] = []      # 环形缓冲: 蛇节 (x,y) 坐标对
+buf: list[i32; 192] = []        # 棋盘 16*12
+
+COLS: i32 = 16
+ROWS: i32 = 12
+MAXN: i32 = 192
+
+# ---- 随机(LCG, i32 回绕即模 2^32) ----
+def nrand() -> i32:
+    s: i32 = st[4] * 1103515245 + 12345
+    st[4] = s & 2147483647
+    return st[4]
+
+# ---- 食物生成: 返回 1=成功 0=满盘(胜利) ----
+def gen_food() -> i32:
+    tries: i32 = 0
+    while tries < 300:
+        r: i32 = nrand()
+        x: i32 = 1 + r % 14
+        y: i32 = 1 + (r >> 8) % 10
+        if buf[y * 16 + x] == 0:
+            st[5] = x
+            st[6] = y
+            return 1
+        tries = tries + 1
+    i: i32 = 0
+    while i < MAXN:
+        if buf[i] == 0:
+            st[5] = i % 16
+            st[6] = i // 16
+            return 1
+        i = i + 1
+    return 0
+
+# ---- 初始化 ----
+def init() -> i32:
+    i: i32 = 0
+    while i < MAXN:
+        buf[i] = 0
+        i = i + 1
+    i = 0
+    while i < 384:
+        snake[i] = 0
+        i = i + 1
+    # 蛇初始: (7,6) (8,6) (9,6), 头在最右, 方向向右
+    snake[0] = 7
+    snake[1] = 6
+    snake[2] = 8
+    snake[3] = 6
+    snake[4] = 9
+    snake[5] = 6
+    st[0] = 2       # head 指针
+    st[1] = 0       # tail 指针
+    st[2] = 3       # 蛇长
+    st[3] = 0       # 方向: 右
+    st[4] = 20261003
+    st[7] = 0
+    st[8] = 1
+    gen_food()
+    return 0
+
+# ---- 重建棋盘: 墙 + 蛇身 + 蛇头 + 食物 ----
+def rebuild() -> i32:
+    i: i32 = 0
+    while i < MAXN:
+        buf[i] = 0
+        i = i + 1
+    i = 0
+    while i < 16:
+        buf[i] = 4
+        buf[11 * 16 + i] = 4
+        i = i + 1
+    i = 0
+    while i < 12:
+        buf[i * 16] = 4
+        buf[i * 16 + 15] = 4
+        i = i + 1
+    i = 0
+    j: i32 = st[1]
+    while i < st[2]:
+        buf[snake[j * 2 + 1] * 16 + snake[j * 2]] = 1
+        j = j + 1
+        if j >= MAXN:
+            j = 0
+        i = i + 1
+    buf[snake[st[0] * 2 + 1] * 16 + snake[st[0] * 2]] = 2
+    buf[st[6] * 16 + st[5]] = 3
+    return 0
+
+# ---- 渲染 ----
+def draw() -> i32:
+    rebuild()
+    r: i32 = 0
+    while r < 12:
+        print(buf[r * 16], buf[r * 16 + 1], buf[r * 16 + 2], buf[r * 16 + 3], buf[r * 16 + 4], buf[r * 16 + 5], buf[r * 16 + 6], buf[r * 16 + 7], buf[r * 16 + 8], buf[r * 16 + 9], buf[r * 16 + 10], buf[r * 16 + 11], buf[r * 16 + 12], buf[r * 16 + 13], buf[r * 16 + 14], buf[r * 16 + 15])
+        r = r + 1
+    print("score:", st[7], "len:", st[2], "   w/a/s/d=移动 q=退出")
+    return 0
+
+# ---- 一步: 返回 1=存活 0=撞死 2=满盘胜利 ----
+def step(k: i32) -> i32:
+    if k == 119:            # w 上
+        if st[3] != 1:
+            st[3] = 3
+    elif k == 115:          # s 下
+        if st[3] != 3:
+            st[3] = 1
+    elif k == 97:           # a 左
+        if st[3] != 0:
+            st[3] = 2
+    elif k == 100:          # d 右
+        if st[3] != 2:
+            st[3] = 0
+    else:
+        return 1            # 非方向键: 本帧不走
+    hx: i32 = snake[st[0] * 2]
+    hy: i32 = snake[st[0] * 2 + 1]
+    nx: i32 = hx
+    ny: i32 = hy
+    if st[3] == 0:
+        nx = hx + 1
+    elif st[3] == 1:
+        ny = hy + 1
+    elif st[3] == 2:
+        nx = hx - 1
+    else:
+        ny = hy - 1
+    # 撞墙
+    if nx <= 0 or nx >= 15 or ny <= 0 or ny >= 11:
+        st[8] = 0
+        return 0
+    # 撞身(跳过尾节: 尾部即将移走)
+    i: i32 = 0
+    j: i32 = st[1]
+    while i < st[2]:
+        if j != st[1]:
+            if snake[j * 2] == nx and snake[j * 2 + 1] == ny:
+                st[8] = 0
+                return 0
+        j = j + 1
+        if j >= MAXN:
+            j = 0
+        i = i + 1
+    # 吃到食物?
+    ate: i32 = 0
+    if nx == st[5] and ny == st[6]:
+        ate = 1
+    # 推进蛇头
+    newh: i32 = st[0] + 1
+    if newh >= MAXN:
+        newh = 0
+    st[0] = newh
+    snake[st[0] * 2] = nx
+    snake[st[0] * 2 + 1] = ny
+    if ate == 1:
+        st[2] = st[2] + 1
+        st[7] = st[7] + 10
+        if gen_food() == 0:
+            st[8] = 0
+            return 2       # 满盘: 胜利
+    else:
+        t: i32 = st[1] + 1
+        if t >= MAXN:
+            t = 0
+        st[1] = t
+    return 1
+
+# ---- 主循环 ----
+def main() -> i32:
+    init()
+    draw()
+    while True:
+        k: i32 = input()
+        if k == 0:          # EOF
+            break
+        if k == 113:        # q 退出
+            break
+        r: i32 = step(k)
+        if r == 0:
+            print("game over! 撞墙或撞到自己, score:", st[7])
+            break
+        if r == 2:
+            print("满盘! 你赢了! score:", st[7])
+            break
+        draw()
+    return 0

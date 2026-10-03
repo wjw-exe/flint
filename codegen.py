@@ -341,25 +341,33 @@ class CodeGen:
                 self.gen_expr(s.expr)
             self._emit(f"JMP {self.ret_label}")
         elif isinstance(s, If):
-            self.gen_expr(s.cond)
-            l_else = self._label()
-            self._emit("CMPI r0, 0")
-            self._emit(f"JE {l_else}")
-            for st in s.body:
-                self.gen_stmt(st)
-            for c, b in s.elifs:
-                l_next = self._label()
+            # 统一 if/elif/else 链: 每个条件假 → 跳下一个条件; 最后一个条件假 → else/出口
+            l_after = self._label()     # 整体出口
+            conds = [(s.cond, s.body)] + list(s.elifs)
+            for idx, (c, b) in enumerate(conds):
+                is_last = idx == len(conds) - 1
                 self.gen_expr(c)
                 self._emit("CMPI r0, 0")
-                self._emit(f"JE {l_next}")
-                for st in b:
-                    self.gen_stmt(st)
-                self._emit(f"JMP {l_else}")
-                self._emit(f"{l_next}:")
-            if s.else_body:
-                for st in s.else_body:
-                    self.gen_stmt(st)
-            self._emit(f"{l_else}:")
+                if is_last:
+                    l_false = self._label()
+                    self._emit(f"JE {l_false}")
+                    for st in b:
+                        self.gen_stmt(st)
+                    self._emit(f"JMP {l_after}")
+                    if s.else_body:
+                        self._emit(f"{l_false}:")
+                        for st in s.else_body:
+                            self.gen_stmt(st)
+                    else:
+                        self._emit(f"{l_false}:")
+                    self._emit(f"{l_after}:")
+                else:
+                    l_next = self._label()
+                    self._emit(f"JE {l_next}")
+                    for st in b:
+                        self.gen_stmt(st)
+                    self._emit(f"JMP {l_after}")
+                    self._emit(f"{l_next}:")
         elif isinstance(s, While):
             l_cond = self._label()
             l_after = self._label()   # 循环之后(无 else 时= l_end; 有 else 时= else 后)
