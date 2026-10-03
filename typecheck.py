@@ -380,6 +380,18 @@ class TypeChecker:
             if t != "i32":
                 raise TypeCheckError(c.line, f"sleep 参数必须是 i32, 得到 {type_str(t)}")
             return "void"
+        GFX = {"window": ("void", 2), "clear": ("void", 1), "fill_rect": ("void", 5),
+               "fill_circle": ("void", 4), "draw_line": ("void", 5), "draw_char": ("void", 5),
+               "poll_key": ("i32", 0), "window_closed": ("i32", 0), "present": ("void", 0)}
+        if c.name in GFX:
+            ret, n = GFX[c.name]
+            if len(c.args) != n:
+                raise TypeCheckError(c.line, f"{c.name} 需要 {n} 个参数, 得到 {len(c.args)}")
+            for a in c.args:
+                t = self.expr(a)
+                if t != "i32":
+                    raise TypeCheckError(c.line, f"{c.name} 参数必须是 i32, 得到 {type_str(t)}")
+            return ret
         if c.name == "len":
             if len(c.args) != 1:
                 raise TypeCheckError(c.line, "len 需要 1 个参数")

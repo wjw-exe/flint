@@ -21,7 +21,7 @@ class VMError(Exception):
 
 
 class VM:
-    def __init__(self, image: bytes, input_data: bytes = None, mem_size: int = isa.MEM_SIZE):
+    def __init__(self, image: bytes, input_data: bytes = None, mem_size: int = isa.MEM_SIZE, gfx=None):
         if len(image) > mem_size:
             raise VMError(f"镜像过大: {len(image)} 字节 > 内存 {mem_size}")
         self.mem_size = mem_size
@@ -38,6 +38,7 @@ class VM:
         if input_data is not None:
             self._in = bytearray(input_data)
         self.output = bytearray()
+        self.gfx = gfx
 
     # ---------- 标志位 ----------
     def _set_alu_flags(self, result: int):
@@ -265,6 +266,14 @@ class VM:
                 elif imm16 == 12:
                     import time
                     time.sleep(max(0.0, isa.to_i32(regs[0]) / 1000.0))   # sleep(ms)
+                elif 20 <= imm16 <= 28:
+                    # 2D 游戏引擎系统调用: window/clear/fill_rect/fill_circle/
+                    # draw_line/draw_char/poll_key/window_closed/present
+                    if self.gfx is None:
+                        raise VMError(f"图形内置(TRAP {imm16})只能在 gfx 模式下使用 @pc={old_pc:#06x}")
+                    r = self.gfx.syscall(imm16, regs)
+                    if r is not None:
+                        regs[rd] = r
                 else:
                     raise VMError(f"运行时陷阱: 未定义陷阱 {imm16} @pc={old_pc:#06x}")
             elif name == "HLT":

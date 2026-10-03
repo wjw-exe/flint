@@ -274,7 +274,10 @@ class CodeGen:
         if isinstance(e, Call):
             return {"print": "void", "input": "i32", "getch": "i32", "clrscr": "void",
                     "sleep": "void", "len": "i32", "abs": "i32",
-                    "min": "i32", "max": "i32", "sum": "i32", "pow": "i32"}.get(e.name, "i32")
+                    "min": "i32", "max": "i32", "sum": "i32", "pow": "i32",
+                    "window": "void", "clear": "void", "fill_rect": "void",
+                    "fill_circle": "void", "draw_line": "void", "draw_char": "void",
+                    "poll_key": "i32", "window_closed": "i32", "present": "void"}.get(e.name, "i32")
         return "i32"
 
     def _elem_type(self, e):
@@ -823,6 +826,18 @@ class CodeGen:
         if c.name == "sleep":
             self.gen_expr(c.args[0])
             self._emit("TRAP 12")       # 系统调用: 延时(毫秒)
+            return
+        GFX = {"window": 20, "clear": 21, "fill_rect": 22, "fill_circle": 23,
+               "draw_line": 24, "draw_char": 25, "poll_key": 26,
+               "window_closed": 27, "present": 28}
+        if c.name in GFX:
+            for a in c.args:            # 参数依次压栈
+                self.gen_expr(a)
+                self._emit("PUSH r0")
+            n = len(c.args)
+            for i in range(n):          # 反序弹出: 最后一个参数 → 最高寄存器
+                self._emit(f"POP r{n - 1 - i}")
+            self._emit(f"TRAP {GFX[c.name]}")
             return
         if c.name == "len":
             arg = c.args[0]

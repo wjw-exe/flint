@@ -1,0 +1,206 @@
+# 图形版贪吃蛇 — Flint v2.2 + 2D 游戏引擎 (flint_engine.py)
+#
+# 窗口 480x360, 16x12 网格(每格 30px)
+# 操作: w/a/s/d 转向, q/Esc 退出
+# 颜色(调色板索引): 0黑底 1白字 2红头 3绿身 5黄食物 9深灰墙
+# 帧循环: poll_key 转向 → 每 5 帧前进一格 → render → present → sleep(16)
+
+st: list[i32; 12] = []
+snake: list[i32; 384] = []
+MAXN: i32 = 192
+CELL: i32 = 30
+W: i32 = 480
+H: i32 = 360
+
+def nrand() -> i32:
+    s: i32 = st[4] * 1103515245 + 12345
+    st[4] = s & 2147483647
+    return st[4]
+
+def is_free(x: i32, y: i32) -> i32:
+    i: i32 = 0
+    j: i32 = st[1]
+    while i < st[2]:
+        if snake[j * 2] == x and snake[j * 2 + 1] == y:
+            return 0
+        j = j + 1
+        if j >= MAXN:
+            j = 0
+        i = i + 1
+    return 1
+
+def gen_food() -> i32:
+    tries: i32 = 0
+    while tries < 300:
+        r: i32 = nrand()
+        x: i32 = 1 + r % 14
+        y: i32 = 1 + (r >> 8) % 10
+        if is_free(x, y) == 1:
+            st[5] = x
+            st[6] = y
+            return 1
+        tries = tries + 1
+    return 0
+
+def init() -> i32:
+    i: i32 = 0
+    while i < 384:
+        snake[i] = 0
+        i = i + 1
+    snake[0] = 7
+    snake[1] = 6
+    snake[2] = 8
+    snake[3] = 6
+    snake[4] = 9
+    snake[5] = 6
+    st[0] = 2
+    st[1] = 0
+    st[2] = 3
+    st[3] = 0
+    st[4] = 20261003
+    st[7] = 0
+    st[8] = 1
+    gen_food()
+    return 0
+
+def steer(k: i32) -> i32:
+    if k == 119:            # w 上
+        if st[3] != 1:
+            st[3] = 3
+    elif k == 115:          # s 下
+        if st[3] != 3:
+            st[3] = 1
+    elif k == 97:           # a 左
+        if st[3] != 0:
+            st[3] = 2
+    elif k == 100:          # d 右
+        if st[3] != 2:
+            st[3] = 0
+    return 0
+
+def advance() -> i32:
+    hx: i32 = snake[st[0] * 2]
+    hy: i32 = snake[st[0] * 2 + 1]
+    nx: i32 = hx
+    ny: i32 = hy
+    if st[3] == 0:
+        nx = hx + 1
+    elif st[3] == 1:
+        ny = hy + 1
+    elif st[3] == 2:
+        nx = hx - 1
+    else:
+        ny = hy - 1
+    if nx <= 0 or nx >= 15 or ny <= 0 or ny >= 11:
+        st[8] = 0
+        return 0
+    i: i32 = 0
+    j: i32 = st[1]
+    while i < st[2]:
+        if j != st[1]:
+            if snake[j * 2] == nx and snake[j * 2 + 1] == ny:
+                st[8] = 0
+                return 0
+        j = j + 1
+        if j >= MAXN:
+            j = 0
+        i = i + 1
+    ate: i32 = 0
+    if nx == st[5] and ny == st[6]:
+        ate = 1
+    newh: i32 = st[0] + 1
+    if newh >= MAXN:
+        newh = 0
+    st[0] = newh
+    snake[st[0] * 2] = nx
+    snake[st[0] * 2 + 1] = ny
+    if ate == 1:
+        st[2] = st[2] + 1
+        st[7] = st[7] + 10
+        if gen_food() == 0:
+            st[8] = 0
+            return 2
+    else:
+        t: i32 = st[1] + 1
+        if t >= MAXN:
+            t = 0
+        st[1] = t
+    return 1
+
+# ---- 渲染 ----
+def draw_num(x: i32, y: i32, n: i32) -> i32:
+    digs: list[i32; 8] = []
+    d: i32 = 0
+    t: i32 = n
+    if t == 0:
+        draw_char(x, y, 22, 48, 1)
+        return 0
+    while t > 0:
+        digs[d] = 48 + t % 10
+        t = t // 10
+        d = d + 1
+    i: i32 = 0
+    while i < d:
+        draw_char(x + (d - 1 - i) * 16, y, 22, digs[i], 1)
+        i = i + 1
+    return 0
+
+def render() -> i32:
+    clear(0)
+    fill_rect(0, 0, W, 4, 9)
+    fill_rect(0, H - 4, W, 4, 9)
+    fill_rect(0, 0, 4, H, 9)
+    fill_rect(W - 4, 0, 4, H, 9)
+    i: i32 = 0
+    j: i32 = st[1]
+    while i < st[2]:
+        fill_rect(snake[j * 2] * CELL + 2, snake[j * 2 + 1] * CELL + 2, CELL - 4, CELL - 4, 3)
+        j = j + 1
+        if j >= MAXN:
+            j = 0
+        i = i + 1
+    fill_rect(snake[st[0] * 2] * CELL + 2, snake[st[0] * 2 + 1] * CELL + 2, CELL - 4, CELL - 4, 2)
+    fill_circle(st[5] * CELL + CELL // 2, st[6] * CELL + CELL // 2, 12, 5)
+    draw_num(8, 8, st[7])
+    return 0
+
+def draw_gameover() -> i32:
+    draw_char(140, 168, 26, 71, 2)   # G
+    draw_char(168, 168, 26, 65, 2)   # A
+    draw_char(196, 168, 26, 77, 2)   # M
+    draw_char(224, 168, 26, 69, 2)   # E
+    draw_char(268, 168, 26, 79, 2)   # O
+    draw_char(296, 168, 26, 86, 2)   # V
+    draw_char(324, 168, 26, 69, 2)   # E
+    draw_char(352, 168, 26, 82, 2)   # R
+    return 0
+
+def main() -> i32:
+    init()
+    window(W, H)
+    frame: i32 = 0
+    while True:
+        if window_closed() == 1:
+            break
+        k: i32 = poll_key()
+        if k == 113 or k == 27:
+            break
+        if k != 0:
+            steer(k)
+        if frame % 5 == 0:
+            r: i32 = advance()
+            if r == 0:
+                render()
+                draw_gameover()
+                present()
+                sleep(2000)
+                break
+            if r == 2:
+                render()
+                present()
+                break
+        render()
+        present()
+        sleep(16)
+        frame = frame + 1
+    return 0
