@@ -1,0 +1,36 @@
+# lists.fl — 静态列表(编译期定长, 无堆分配)
+def main() -> i32:
+    xs: list[i32] = [10, 20, 30, 40]
+    print(len(xs))          # 4
+    print(xs[0])            # 10
+    print(xs[3])            # 40
+    print(xs[-1])           # 40 (负索引)
+    xs[1] = 99
+    print(xs[1])            # 99
+
+    # 复合赋值: 索引目标只寻址一次
+    xs[0] += 5
+    print(xs[0])            # 15
+
+    # 定长零初始化
+    buf: list[i32; 5] = []
+    print(len(buf))         # 5
+    print(buf[0])           # 0
+    buf[4] = 7
+    print(buf[4])           # 7
+
+    # 遍历列表
+    total: i32 = 0
+    for x in xs:
+        total += x
+    print(total)            # 15+99+30+40 = 184
+
+    # 遍历列表字面量
+    s: i32 = 0
+    for y in [1, 2, 3, 4]:
+        s += y
+    print(s)                # 10
+
+    # 越界会触发运行时陷阱
+    # print(xs[10])  # → 运行时陷阱: 索引越界
+    return 0

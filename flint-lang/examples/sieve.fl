@@ -1,0 +1,30 @@
+// sieve.fl — 埃拉托斯特尼筛法, 演示全局数组与嵌套循环
+// 输出 200 以内所有素数
+
+char is_composite[201];     // 全局 char 数组
+
+int main() {
+    int i;
+    int j;
+    i = 2;
+    while (i * i <= 200) {
+        if (is_composite[i] == 0) {
+            j = i * i;
+            while (j <= 200) {
+                is_composite[j] = 1;
+                j = j + i;
+            }
+        }
+        i = i + 1;
+    }
+    i = 2;
+    while (i <= 200) {
+        if (is_composite[i] == 0) {
+            print(i);
+            printc(' ');
+        }
+        i = i + 1;
+    }
+    printc('\n');
+    return 0;
+}

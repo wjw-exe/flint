@@ -1,0 +1,8 @@
+# 依赖与构建产物(不入库)
+.env/
+dist/
+build/
+__pycache__/
+*.spec
+*.log
+*.exe

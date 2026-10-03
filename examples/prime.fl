@@ -1,0 +1,16 @@
+# 素性检测 —— 返回 bool, 使用 %, 除法和比较
+def is_prime(n: i32) -> bool:
+    if n < 2:
+        return False
+    i: i32 = 2
+    while i * i <= n:
+        if n % i == 0:
+            return False
+        i = i + 1
+    return True
+
+def main() -> i32:
+    print(is_prime(97))     # 1
+    print(is_prime(100))    # 0
+    print(is_prime(2))      # 1
+    return 0

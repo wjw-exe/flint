@@ -1,0 +1,49 @@
+// brainfuck.fl — Brainfuck 解释器
+// 图灵完备性证明: Brainfuck 已被证明图灵完备;
+// 任何 BF 程序都可被这个固定长度的燧石程序模拟,
+// 因此燧石语言(及其汇编)也是图灵完备的。
+// 运行: python3 flint.py run examples/brainfuck.fl
+// 或  : python3 flint.py bf examples/hello.bf
+
+char tape[30000];
+char prog[] = "++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.";
+
+int main() {
+    int ip = 0;
+    int ptr = 0;
+    while (prog[ip] != 0) {
+        if (prog[ip] == '>') {
+            ptr = ptr + 1;
+        } else if (prog[ip] == '<') {
+            ptr = ptr - 1;
+        } else if (prog[ip] == '+') {
+            tape[ptr] = tape[ptr] + 1;
+        } else if (prog[ip] == '-') {
+            tape[ptr] = tape[ptr] - 1;
+        } else if (prog[ip] == '.') {
+            printc(tape[ptr]);
+        } else if (prog[ip] == ',') {
+            tape[ptr] = input();
+        } else if (prog[ip] == '[') {
+            if (tape[ptr] == 0) {
+                int depth1 = 1;
+                while (depth1 > 0) {
+                    ip = ip + 1;
+                    if (prog[ip] == '[') { depth1 = depth1 + 1; }
+                    if (prog[ip] == ']') { depth1 = depth1 - 1; }
+                }
+            }
+        } else if (prog[ip] == ']') {
+            if (tape[ptr] != 0) {
+                int depth2 = 1;
+                while (depth2 > 0) {
+                    ip = ip - 1;
+                    if (prog[ip] == ']') { depth2 = depth2 + 1; }
+                    if (prog[ip] == '[') { depth2 = depth2 - 1; }
+                }
+            }
+        }
+        ip = ip + 1;
+    }
+    return 0;
+}

@@ -1,0 +1,5 @@
+# 输入: input() 读取一个字节, 返回其数值(EOF 时为 0)
+def main() -> i32:
+    x: i32 = input()
+    print(x)
+    return 0

@@ -1,0 +1,16 @@
+// fib.fl — 递归 Fibonacci, 演示函数调用 / 递归 / 参数传递
+// 输出: fib(15) = 610
+
+int fib(int n) {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+int main() {
+    prints("fib(15) = ");
+    print(fib(15));
+    printc('\n');
+    return 0;
+}

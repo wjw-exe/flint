@@ -1,0 +1,18 @@
+# Flint v2 入门示例 —— 语法与 Python 高度一致, 但它是编译型的
+def main() -> i32:
+    print("Hello, World!")
+    print("你好，燧石语言！")
+
+    a: i32 = 40
+    b: i32 = 2
+    print(a + b)            # 42
+
+    flag: bool = True
+    print(flag)             # 1
+    print(not flag)         # 0
+    print(flag and False)   # 0
+    print(flag or False)    # 1
+
+    print((a + b) * 3)      # 126
+    print(-7)               # -7
+    return 0

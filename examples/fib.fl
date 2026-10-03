@@ -1,0 +1,9 @@
+# 斐波那契 —— 递归函数, 真实栈帧调用
+def fib(n: i32) -> i32:
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+def main() -> i32:
+    print(fib(15))
+    return 0

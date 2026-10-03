@@ -1,0 +1,12 @@
+// echo.fl — 输入/输出: 从 stdin 逐字节读入并回显(EOF 时结束)
+// 运行: echo "hello 燧石" | python3 flint.py run examples/echo.fl
+
+int main() {
+    int c;
+    c = input();
+    while (c != 0) {
+        printc(c);
+        c = input();
+    }
+    return 0;
+}

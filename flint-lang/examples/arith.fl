@@ -1,0 +1,22 @@
+// arith.fl — 算术/位运算/逻辑运算综合测试
+// 验证: 除法(向零截断)、取模(符号随被除数)、位运算、逻辑短路
+
+int main() {
+    print(7 / 2);            printc('\n');   // 3
+    print(7 % 2);            printc('\n');   // 1
+    print(-7 / 2);           printc('\n');   // -3
+    print(-7 % 2);           printc('\n');   // -1
+    print(10 & 6);           printc('\n');   // 2
+    print(10 | 3);           printc('\n');   // 11
+    print(10 ^ 3);           printc('\n');   // 9
+    print(~0);               printc('\n');   // -1
+    print(1 << 4);           printc('\n');   // 16
+    print(256 >> 4);         printc('\n');   // 16
+    print(!0);               printc('\n');   // 1
+    print(!7);               printc('\n');   // 0
+    print(1 && 0 || 1);      printc('\n');   // 1
+    print(0 || 0 && 1);      printc('\n');   // 0
+    print((1 + 2) * (3 + 4)); printc('\n');  // 21
+    print(100 / 7 * 7 + 100 % 7); printc('\n'); // 100
+    return 0;
+}

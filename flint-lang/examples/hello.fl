@@ -1,0 +1,15 @@
+// hello.fl — 燧石高级语言第一个程序
+// 展示 print / printc / prints / 字符串字面量 / 全局 char 数组
+
+char greeting[] = "你好，燧石语言！";
+
+int main() {
+    prints("Hello, World!\n");      // 字符串字面量
+    prints(greeting);               // 全局 char 数组
+    printc('\n');                   // 单字符输出
+    print(1 + 2 * 3);               // 表达式 → 7
+    printc('\n');
+    print(2026 - 4 * 7);            // 2026 - 28 = 1998
+    printc('\n');
+    return 0;
+}

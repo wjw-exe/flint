@@ -1,0 +1,15 @@
+// strings.fl — 字符串内置函数: strcpy / strlen / prints
+// 输出: Hello, Flint! (8)
+
+char buf[100];
+
+int main() {
+    int len;
+    strcpy(buf, "Hello, Flint!");
+    prints(buf);
+    printc('\n');
+    len = strlen(buf);
+    print(len);
+    printc('\n');
+    return 0;
+}

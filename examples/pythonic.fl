@@ -1,0 +1,56 @@
+# pythonic.fl — 语法更接近 Python 的编译器
+g_base: i32 = 100            # 全局变量(只读)
+g_lst: list[i32] = [5, 6, 7]
+
+def main() -> i32:
+    # 类型推断: 首次赋值即声明
+    x = 10
+    y = 3
+    print(x + y)             # 13
+
+    # 复合赋值(变量目标)
+    x += 5                   # x = 15
+    x *= 2                   # x = 30
+    x //= 4                  # x = 7 (地板除)
+    print(x)                 # 7
+
+    # 多参数 print(空格分隔, 自动换行)
+    print(1, 2, 3)           # "1 2 3"
+
+    # range 三种形式
+    a: i32 = 0
+    for i in range(5):       # 0..4
+        a += i
+    print(a)                 # 10
+
+    b: i32 = 0
+    for i in range(2, 6):    # 2..5
+        b += i
+    print(b)                 # 14
+
+    c: i32 = 0
+    for i in range(10, 0, -3):   # 10, 7, 4, 1
+        c += i
+    print(c)                 # 22
+
+    # 链式比较
+    print(1 < x < 100)       # 1
+    print(1 < x < 5)         # 0
+
+    # 内置函数
+    print(abs(-42))          # 42
+    s = "hello"
+    print(len(s))            # 5
+
+    # 全局变量(只读)
+    print(g_base + 1)        # 101
+    print(g_lst[0])          # 5
+    print(len(g_lst))        # 3
+
+    # 动态步长 range
+    d: i32 = 0
+    step = 4
+    for i in range(0, 30, step):
+        d += i
+    print(d)                 # 0+4+8+12+16+20+24+28 = 112
+    return 0

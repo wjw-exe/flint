@@ -1,0 +1,171 @@
+<html style="margin:0;padding:0;">
+<title>燧石语言 Flint 工具链架构与图灵完备性</title>
+<div style="width:100%;box-sizing:border-box;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#f7f8fa;color:#1f2937;padding:24px 16px;">
+  <div style="max-width:960px;margin:0 auto;">
+
+    <div style="text-align:center;margin-bottom:8px;">
+      <div style="font-size:26px;font-weight:700;letter-spacing:1px;">燧石语言 Flint</div>
+      <div style="font-size:14px;color:#6b7280;margin-top:4px;">一套从零打造的完整编程语言工具链 · 基于自研汇编 · 图灵完备</div>
+    </div>
+
+    <!-- 第 1 部分: 编译工具链流水线 -->
+    <div style="font-size:18px;font-weight:600;margin:28px 0 12px;padding-left:10px;border-left:4px solid #0f766e;color:#0f766e;">① 编译与执行流水线</div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+
+      <!-- 阶段 1: 高级语言源码 -->
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;">
+        <div style="flex:1 1 150px;min-width:150px;background:#ecfdf5;border:2px solid #10b981;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#065f46;">.fl 高级语言源码</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">fib.fl · sieve.fl · brainfuck.fl<br>类 C 语法: 函数/递归/数组/字符串</div>
+        </div>
+        <div style="align-self:center;font-size:20px;color:#9ca3af;">→</div>
+        <!-- 阶段 2: 词法 -->
+        <div style="flex:1 1 130px;min-width:130px;background:#fefce8;border:2px solid #eab308;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#854d0e;">词法分析</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">lexer.py<br>token 流: NUM / ID / OP…</div>
+        </div>
+        <div style="align-self:center;font-size:20px;color:#9ca3af;">→</div>
+        <!-- 阶段 3: 语法 -->
+        <div style="flex:1 1 130px;min-width:130px;background:#fff7ed;border:2px solid #f97316;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#9a3412;">语法分析</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">parser.py<br>递归下降 · 抽象语法树 AST</div>
+        </div>
+        <div style="align-self:center;font-size:20px;color:#9ca3af;">→</div>
+        <!-- 阶段 4: 代码生成 -->
+        <div style="flex:1 1 150px;min-width:150px;background:#eff6ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#1e40af;">代码生成</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">codegen.py<br>生成<b>可读的汇编源码</b>（可人工检查）</div>
+        </div>
+        <div style="align-self:center;font-size:20px;color:#9ca3af;">→</div>
+        <!-- 阶段 5: 汇编器 -->
+        <div style="flex:1 1 130px;min-width:130px;background:#fdf2f8;border:2px solid #ec4899;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#9d174d;">汇编器</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">assembler.py<br>两趟扫描 · 标签/数据段</div>
+        </div>
+        <div style="align-self:center;font-size:20px;color:#9ca3af;">→</div>
+        <!-- 阶段 6: 虚拟机 -->
+        <div style="flex:1 1 130px;min-width:130px;background:#f0fdfa;border:2px solid #14b8a6;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#0f766e;">虚拟机</div>
+          <div style="font-size:13px;color:#4b5563;margin-top:4px;">vm.py<br>.bin 字节码 → 输出/退出码</div>
+        </div>
+      </div>
+
+      <!-- 手工编写入口 -->
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px dashed #d1d5db;">
+        <div style="font-size:13px;color:#6b7280;font-weight:600;">另一入口：</div>
+        <div style="background:#f3f4f6;border:1px solid #9ca3af;border-radius:8px;padding:8px 14px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#374151;">手写 .asm 汇编</div>
+          <div style="font-size:12px;color:#4b5563;">hello.asm · fib.asm</div>
+        </div>
+        <div style="font-size:20px;color:#9ca3af;">→</div>
+        <div style="background:#fdf2f8;border:2px solid #ec4899;border-radius:8px;padding:8px 14px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#9d174d;">汇编器</div>
+        </div>
+        <div style="font-size:20px;color:#9ca3af;">→</div>
+        <div style="background:#f0fdfa;border:2px solid #14b8a6;border-radius:8px;padding:8px 14px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#0f766e;">虚拟机</div>
+        </div>
+      </div>
+
+      <div style="font-size:13px;color:#6b7280;margin-top:12px;">
+        CLI：<code style="background:#f3f4f6;padding:1px 6px;border-radius:4px;">python3 flint.py run xxx.fl</code>　
+        <code style="background:#f3f4f6;padding:1px 6px;border-radius:4px;">python3 flint.py asm xxx.asm -o out.bin</code>　
+        <code style="background:#f3f4f6;padding:1px 6px;border-radius:4px;">--trace</code> 逐指令跟踪
+      </div>
+    </div>
+
+    <!-- 第 2 部分: 机器模型 -->
+    <div style="font-size:18px;font-weight:600;margin:28px 0 12px;padding-left:10px;border-left:4px solid #0f766e;color:#0f766e;">② 机器模型 (FlintVM)</div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+      <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <div style="flex:1 1 200px;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:6px;">寄存器</div>
+          <div style="font-size:13px;line-height:1.7;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;">
+            R0–R13 通用<br>
+            <b>R14 = FP</b>（帧指针）<br>
+            <b>R15 = SP</b>（栈指针, 栈从顶部向下生长）<br>
+            PC 程序计数器 · FLAGS: Z/N/C/O
+          </div>
+        </div>
+        <div style="flex:1 1 200px;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:6px;">内存 64 KB（字节寻址）</div>
+          <div style="font-size:13px;line-height:1.7;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;">
+            地址 0x0000 … 代码区<br>
+            数据段（DB/DW/DS 与字符串常量）<br>
+            ↓ 栈向下生长 ↓<br>
+            0xFFFF 顶部
+          </div>
+        </div>
+        <div style="flex:1 1 200px;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:6px;">指令集 35 条</div>
+          <div style="font-size:13px;line-height:1.7;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;">
+            算术: ADD/SUB/MUL/DIV/MOD<br>
+            逻辑: AND/OR/XOR/NOT/SHL/SHR<br>
+            跳转: JMP/JE/JNE/JG/JL/JGE/JLE<br>
+            调用: CALL/RET/PUSH/POP<br>
+            内存: LD/ST/LDB/STB/LDA<br>
+            I/O: IN/OUT/OUTI · HLT
+          </div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#6b7280;margin-top:10px;">
+        调用约定：参数从右向左压栈，第 i 个参数位于 FP+8+4i；序言 <code style="background:#f3f4f6;padding:1px 6px;border-radius:4px;">PUSH r14; MOV r14, r15; SUB r15, r15, n</code>；返回值在 r0。
+      </div>
+    </div>
+
+    <!-- 第 3 部分: 图灵完备性证明 -->
+    <div style="font-size:18px;font-weight:600;margin:28px 0 12px;padding-left:10px;border-left:4px solid #0f766e;color:#0f766e;">③ 图灵完备性证明链</div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+        <div style="flex:1 1 130px;min-width:130px;background:#f3f4f6;border:2px solid #6b7280;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#374151;">任意图灵机 M</div>
+          <div style="font-size:12px;color:#4b5563;">纸带 + 状态 + 转移规则</div>
+        </div>
+        <div style="align-self:center;font-size:18px;color:#9ca3af;">＝</div>
+        <div style="flex:1 1 120px;min-width:120px;background:#f3f4f6;border:2px solid #6b7280;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#374151;">Brainfuck 程序</div>
+          <div style="font-size:12px;color:#4b5563;">BF 已被证明图灵完备</div>
+        </div>
+        <div style="align-self:center;font-size:18px;color:#9ca3af;">→</div>
+        <div style="flex:1 1 140px;min-width:140px;background:#eff6ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#1e40af;">燧石 BF 解释器</div>
+          <div style="font-size:12px;color:#4b5563;">brainfuck.fl 内嵌任意 BF 程序并逐指令模拟</div>
+        </div>
+        <div style="align-self:center;font-size:18px;color:#9ca3af;">→</div>
+        <div style="flex:1 1 130px;min-width:130px;background:#ecfdf5;border:2px solid #10b981;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;color:#065f46;">编译为 Flint-ASM</div>
+          <div style="font-size:12px;color:#4b5563;">编译器是全函数，任何合法程序都能汇编</div>
+        </div>
+        <div style="align-self:center;font-size:18px;color:#9ca3af;">→</div>
+        <div style="flex:1 1 100px;min-width:100px;background:#fef2f2;border:2px solid #ef4444;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:15px;font-weight:700;color:#991b1b;">图灵完备 ✓</div>
+          <div style="font-size:12px;color:#4b5563;">可模拟任意图灵机</div>
+        </div>
+      </div>
+      <div style="font-size:13px;color:#6b7280;margin-top:12px;line-height:1.7;">
+        证明要点：① BF 图灵完备（公认结果）；② <code style="background:#f3f4f6;padding:1px 6px;border-radius:4px;">brainfuck.fl</code> 是一个<u>固定有限</u>的燧石程序，能以任意 BF 程序为输入模拟其执行 → 燧石可模拟任意图灵机；③ 每段燧石程序都经编译器完整翻译为汇编 → 汇编层同样完备。与 C/Java 等真实语言一致，64 KB 内存只是工程现实，理论语义下内存可扩展。
+      </div>
+    </div>
+
+    <!-- 第 4 部分: 示例运行结果 -->
+    <div style="font-size:18px;font-weight:600;margin:28px 0 12px;padding-left:10px;border-left:4px solid #0f766e;color:#0f766e;">④ 真实运行输出</div>
+    <div style="background:#111827;border-radius:10px;padding:14px 18px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.8;color:#d1fae5;">
+      <div><span style="color:#34d399;">$</span> python3 flint.py run examples/hello.fl</div>
+      <div>Hello, World!</div>
+      <div>你好，燧石语言！</div>
+      <div>7</div>
+      <div>1998</div>
+      <div style="margin-top:6px;"><span style="color:#34d399;">$</span> python3 flint.py run examples/fib.fl</div>
+      <div>fib(15) = 610</div>
+      <div style="margin-top:6px;"><span style="color:#34d399;">$</span> python3 flint.py bf examples/hello.bf</div>
+      <div>Hello World!</div>
+      <div style="margin-top:6px;"><span style="color:#34d399;">$</span> python3 tests/run_tests.py</div>
+      <div>结果: 17 通过, 0 失败</div>
+    </div>
+
+    <div style="text-align:center;font-size:13px;color:#9ca3af;margin:20px 0 8px;">
+      燧石语言 Flint v1.0.0 · 项目目录 flint-lang/ · 纯 Python 实现, 零第三方依赖
+    </div>
+  </div>
+</div>
+</html>

@@ -1,0 +1,30 @@
+# break_continue.fl — break / continue / pass
+def main() -> i32:
+    n: i32 = 0
+    while True:
+        n += 1
+        if n > 100:
+            break
+        if n % 7 == 0:
+            continue
+        if n == 50:
+            pass            # 空语句
+        n = n               # 占位(保持可读)
+    print(n)                # 101
+
+    # for + break
+    total: i32 = 0
+    for i in range(0, 1000):
+        total += i
+        if total > 120:
+            break
+    print(total)            # 136 (0..16 之和 = 136, 再加 17 就超 120)
+
+    # continue 在 for 中
+    cnt: i32 = 0
+    for j in range(0, 20):
+        if j % 2 == 1:
+            continue
+        cnt += 1
+    print(cnt)              # 10 (0..19 中偶数个数)
+    return 0

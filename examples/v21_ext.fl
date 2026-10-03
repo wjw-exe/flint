@@ -1,0 +1,51 @@
+# v21_ext.fl — v2.2 新命令: 位运算 / 成员测试 / 新内置函数 / 循环 else
+def main() -> i32:
+    # 位运算 & | ^ << >> ~ 与位复合赋值
+    a: i32 = 5
+    print(a & 3)         # 1
+    print(a | 8)         # 13
+    print(a ^ 1)         # 4
+    print(1 << 4)        # 16
+    print(16 >> 2)       # 4
+    print(~0)            # -1
+    a &= 3
+    print(a)             # 1
+
+    # in / not in(列表与字符串字符码)
+    xs: list[i32] = [10, 20, 30]
+    print(20 in xs)      # 1
+    print(99 in xs)      # 0
+    print(99 not in xs)  # 1
+    s: str = "AB"
+    print(65 in s)       # 1
+    print(66 not in s)   # 0
+
+    # min / max / sum / pow
+    print(min(3, 1, 2))  # 1
+    print(max(3, 1, 2))  # 3
+    print(sum(xs))       # 60
+    print(pow(2, 10))    # 1024
+
+    # while-else / for-else: 未 break 正常结束才执行 else
+    i: i32 = 0
+    while i < 3:
+        i += 1
+    else:
+        print("while ok")
+    j: i32 = 0
+    while j < 3:
+        j += 1
+        if j == 2:
+            break
+    else:
+        print("不该打印")
+    for k in range(3):
+        if k == 1:
+            break
+    else:
+        print("不该打印")
+    for k in range(3):
+        pass
+    else:
+        print("for ok")
+    return 0
