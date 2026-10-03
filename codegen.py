@@ -272,7 +272,8 @@ class CodeGen:
                 return "bool"
             return "i32"
         if isinstance(e, Call):
-            return {"print": "void", "input": "i32", "len": "i32", "abs": "i32",
+            return {"print": "void", "input": "i32", "getch": "i32", "clrscr": "void",
+                    "sleep": "void", "len": "i32", "abs": "i32",
                     "min": "i32", "max": "i32", "sum": "i32", "pow": "i32"}.get(e.name, "i32")
         return "i32"
 
@@ -811,6 +812,17 @@ class CodeGen:
             return
         if c.name == "input":
             self._emit("IN r0")
+            return
+        if c.name == "getch":
+            self.gen_expr(c.args[0])
+            self._emit("TRAP 10")       # 系统调用: 无缓冲读键(超时ms)
+            return
+        if c.name == "clrscr":
+            self._emit("TRAP 11")       # 系统调用: 清屏
+            return
+        if c.name == "sleep":
+            self.gen_expr(c.args[0])
+            self._emit("TRAP 12")       # 系统调用: 延时(毫秒)
             return
         if c.name == "len":
             arg = c.args[0]

@@ -74,6 +74,41 @@ class VM:
     def _write_byte(self, b: int):
         self.output.append(b & 0xFF)
 
+    def _getch(self, timeout_ms: int) -> int:
+        """无缓冲读键(带超时): 返回键码; 0=超时无键; -1=EOF/输入耗尽。
+        有输入缓冲(--input/IDE)时从缓冲读; 终端下 Windows 用 msvcrt, 其他用 termios raw。"""
+        if self._in is not None:
+            if self._in_pos < len(self._in):
+                b = self._in[self._in_pos]
+                self._in_pos += 1
+                return b
+            return -1
+        if not sys.stdin.isatty():
+            raw = sys.stdin.buffer.read(1)
+            return raw[0] if raw else -1
+        import time
+        deadline = time.time() + max(0.0, timeout_ms / 1000.0)
+        if sys.platform == "win32":
+            import msvcrt
+            while time.time() < deadline:
+                if msvcrt.kbhit():
+                    b = msvcrt.getch()
+                    return b[0] if isinstance(b, bytes) else ord(b)
+                time.sleep(0.01)
+            return 0
+        import termios, tty, select
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            r, _, _ = select.select([sys.stdin], [], [], max(0.0, timeout_ms / 1000.0))
+            if r:
+                b = sys.stdin.buffer.read(1)
+                return b[0] if b else -1
+            return 0
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
     # ---------- 内存 ----------
     def _check(self, addr: int, n: int):
         if addr < 0 or addr + n > self.mem_size:
@@ -219,8 +254,19 @@ class VM:
             elif name == "OUTI":
                 self.output += str(isa.to_i32(regs[rd])).encode("ascii")
             elif name == "TRAP":
-                msg = {1: "索引越界", 2: "除零错误"}.get(imm16, "未定义陷阱")
-                raise VMError(f"运行时陷阱: {msg} @pc={old_pc:#06x}")
+                if imm16 == 1:
+                    raise VMError(f"运行时陷阱: 索引越界 @pc={old_pc:#06x}")
+                elif imm16 == 2:
+                    raise VMError(f"运行时陷阱: 除零错误 @pc={old_pc:#06x}")
+                elif imm16 == 10:
+                    regs[rd] = self._getch(regs[0])       # getch(ms)
+                elif imm16 == 11:
+                    self.output += b"\x1b[2J\x1b[H"       # clrscr
+                elif imm16 == 12:
+                    import time
+                    time.sleep(max(0.0, isa.to_i32(regs[0]) / 1000.0))   # sleep(ms)
+                else:
+                    raise VMError(f"运行时陷阱: 未定义陷阱 {imm16} @pc={old_pc:#06x}")
             elif name == "HLT":
                 self.halted = True
             else:

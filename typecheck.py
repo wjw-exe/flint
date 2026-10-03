@@ -362,6 +362,24 @@ class TypeChecker:
             if c.args:
                 raise TypeCheckError(c.line, "input() 不需要参数")
             return "i32"
+        if c.name == "getch":
+            if len(c.args) != 1:
+                raise TypeCheckError(c.line, "getch 需要 1 个参数(超时毫秒)")
+            t = self.expr(c.args[0])
+            if t != "i32":
+                raise TypeCheckError(c.line, f"getch 参数必须是 i32, 得到 {type_str(t)}")
+            return "i32"
+        if c.name == "clrscr":
+            if c.args:
+                raise TypeCheckError(c.line, "clrscr() 不需要参数")
+            return "void"
+        if c.name == "sleep":
+            if len(c.args) != 1:
+                raise TypeCheckError(c.line, "sleep 需要 1 个参数(毫秒)")
+            t = self.expr(c.args[0])
+            if t != "i32":
+                raise TypeCheckError(c.line, f"sleep 参数必须是 i32, 得到 {type_str(t)}")
+            return "void"
         if c.name == "len":
             if len(c.args) != 1:
                 raise TypeCheckError(c.line, "len 需要 1 个参数")

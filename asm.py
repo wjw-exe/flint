@@ -914,6 +914,56 @@ class AsmGen:
             self._emit("movl $0, %eax")
             self._emit_label(l_done)
             return
+        if c.name == "clrscr":
+            if not getattr(self, "_clr_emitted", False):
+                self.ro_lines.append('.Lclr: .ascii "\033[2J\033[H"')
+                self._clr_emitted = True
+            self._emit("leaq .Lclr(%rip), %rsi")
+            self._emit("movl $7, %edx")
+            self._emit("movl $1, %edi")
+            self._emit("movl $1, %eax")
+            self._emit("syscall")
+            return
+        if c.name == "sleep":
+            # r0=毫秒 → timespec{sec,nsec} → nanosleep
+            self._emit("movslq %eax, %rax")
+            self._emit("imulq $1000000, %rax")
+            self._emit("movl $1000000000, %ecx")
+            self._emit("xorq %rdx, %rdx")
+            self._emit("divq %rcx")
+            self._emit("subq $16, %rsp")
+            self._stack_off += 16
+            self._emit("movq %rax, 0(%rsp)")
+            self._emit("movq %rdx, 8(%rsp)")
+            self._emit("movq %rsp, %rdi")
+            self._emit("xorq %rsi, %rsi")
+            self._emit("movl $35, %eax")
+            self._emit("syscall")
+            self._emit("addq $16, %rsp")
+            self._emit("movq %rax, %r12")   # 忽略剩余时间, 结果放 r12 不影响 r0
+            self._stack_off -= 16
+            return
+        if c.name == "getch":
+            # 原生后端保持 cooked 模式: read(0,buf,1) 需回车; EOF→-1
+            self._emit("subq $16, %rsp")
+            self._stack_off += 16
+            self._emit("xorl %edi, %edi")
+            self._emit("movq %rsp, %rsi")
+            self._emit("movl $1, %edx")
+            self._emit("movl $0, %eax")
+            self._emit("syscall")
+            l_eof = self._label()
+            l_done = self._label()
+            self._emit("cmpl $1, %eax")
+            self._emit(f"jne .L{l_eof}")
+            self._emit("movzbl (%rsp), %eax")
+            self._emit(f"jmp .L{l_done}")
+            self._emit_label(l_eof)
+            self._emit("movl $-1, %eax")
+            self._emit_label(l_done)
+            self._emit("addq $16, %rsp")
+            self._stack_off -= 16
+            return
         if c.name == "len":
             arg = c.args[0]
             if self._infer_type(arg) == "str":

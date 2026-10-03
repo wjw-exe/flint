@@ -1,7 +1,8 @@
-# 贪吃蛇 (Snake) — Flint v2.2 文本版
+# 贪吃蛇 (Snake) — Flint v2.2 实时终端版
 #
 # 棋盘 16x12, 数字渲染: 0=空格 1=蛇身 2=蛇头 3=食物 4=墙
-# 操作: w=上 a=左 s=下 d=右 q=退出 (输入 EOF 也结束)
+# 操作: w=上 a=左 s=下 d=右 q=退出
+# 蛇自动前进, getch(120) 每帧等键 120ms(既是输入也是帧率控制), 超时保持方向前进
 # 状态共享: 全局定长列表 st/snake/buf (Flint 全局变量只读, 列表内容可变)
 
 # ---- 全局状态 ----
@@ -108,6 +109,7 @@ def draw() -> i32:
     return 0
 
 # ---- 一步: 返回 1=存活 0=撞死 2=满盘胜利 ----
+# k: 119=w上 115=s下 97=a左 100=d右 0=超时(保持方向) 其他=忽略但前进
 def step(k: i32) -> i32:
     if k == 119:            # w 上
         if st[3] != 1:
@@ -121,8 +123,6 @@ def step(k: i32) -> i32:
     elif k == 100:          # d 右
         if st[3] != 2:
             st[3] = 0
-    else:
-        return 1            # 非方向键: 本帧不走
     hx: i32 = snake[st[0] * 2]
     hy: i32 = snake[st[0] * 2 + 1]
     nx: i32 = hx
@@ -175,22 +175,26 @@ def step(k: i32) -> i32:
         st[1] = t
     return 1
 
-# ---- 主循环 ----
+# ---- 主循环: 清屏→画帧→等键(超时即帧率)→前进 ----
 def main() -> i32:
     init()
-    draw()
     while True:
-        k: i32 = input()
-        if k == 0:          # EOF
+        clrscr()
+        draw()
+        k: i32 = getch(120)     # 等键最多 120ms: 超时=0 保持方向前进, EOF=-1 结束
+        if k == -1:
             break
-        if k == 113:        # q 退出
+        if k == 113:            # q 退出
             break
         r: i32 = step(k)
         if r == 0:
+            clrscr()
+            draw()
             print("game over! 撞墙或撞到自己, score:", st[7])
             break
         if r == 2:
+            clrscr()
+            draw()
             print("满盘! 你赢了! score:", st[7])
             break
-        draw()
     return 0
