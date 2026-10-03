@@ -233,6 +233,7 @@ class CodeEditor(QPlainTextEdit):
 # =====================================================================
 class RunWorker(QThread):
     done = pyqtSignal(dict)
+    attach_gfx = pyqtSignal(object)   # 程序含图形内置时发出引擎实例(主线程 attach)
 
     def __init__(self, source: str, input_data: bytes, max_steps: int = MAX_STEPS, parent=None):
         super().__init__(parent)
@@ -250,8 +251,19 @@ class RunWorker(QThread):
             TypeChecker().check(prog)
             asm = CodeGen().generate(prog)
             image, _ = assemble(asm)
-            vm = VM(image, input_data=self.input_data)
+            eng = None
+            if re.search(r"TRAP 2[0-8]\b", asm):
+                # 程序用了图形内置 → 挂 2D 游戏引擎(窗口由主线程创建)
+                from flint_engine import Engine
+                from threading import Event
+                eng = Engine()
+                self.gfx_eng = eng
+                self.gfx_done = Event()
+                self.attach_gfx.emit(eng)
+            vm = VM(image, input_data=self.input_data, gfx=eng)
             out = vm.run(max_steps=self.max_steps)
+            if eng is not None:
+                self.gfx_done.set()
             result.update(ok=True, output=bytes(out), exit_code=vm.exit_code,
                           steps=vm.steps, asm=asm)
         except (LexError, ParseError, TypeCheckError) as e:
@@ -464,6 +476,7 @@ class MainWindow(QMainWindow):
         self.lbl_run.setText("编译中…")
         self.worker = RunWorker(src, self._input_bytes() if run_vm else b"", parent=self)
         self.worker.done.connect(self._on_done)
+        self.worker.attach_gfx.connect(self._on_attach_gfx)
         self.worker.start()
 
     def run_program(self):
@@ -478,7 +491,17 @@ class MainWindow(QMainWindow):
             self.worker.wait(1000)
             self.lbl_run.setText("已停止")
 
+    def _on_attach_gfx(self, eng):
+        """主线程: 为图形程序创建引擎窗口(不阻塞 IDE 事件循环)。"""
+        try:
+            eng.attach(vm_done=getattr(self.worker, "gfx_done", None), close_on_done=True)
+        except Exception as e:  # noqa: BLE001
+            self.tab_error.setPlainText(f"图形引擎启动失败: {e}")
+
     def _on_done(self, r):
+        gfx = getattr(self.worker, "gfx_eng", None)
+        if gfx is not None:
+            gfx.close()
         self.lbl_run.setText(
             f"{r['kind'] or '完成'} · {r['elapsed_ms']} ms"
             + (f" · 退出码 {r['exit_code']} · {r['steps']} 条指令 · 输出 {len(r['output'])} 字节"

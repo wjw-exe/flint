@@ -180,18 +180,39 @@ class Engine:
             self.app.quit()
             return
         if self.vm_done is not None and self.vm_done.is_set():
-            self.app.quit()
+            if getattr(self, "close_on_done", False):
+                self.close()
+            else:
+                self.app.quit()
             return
 
     def run_app(self, max_frames=None, vm_done=None):
         self.max_frames = max_frames
         self.vm_done = vm_done
         self.app = QApplication(sys.argv[:1])
+        self._create_window()
+        self.ready.set()
+        return self.app.exec()
+
+    def attach(self, vm_done=None, max_frames=None, close_on_done=True):
+        """挂到已存在的 QApplication(IDE 集成): 创建窗口 + 定时器, 不阻塞, 不 exec。"""
+        self.vm_done = vm_done
+        self.max_frames = max_frames
+        self.close_on_done = close_on_done
+        self.app = QApplication.instance()
+        self._create_window()
+        self.ready.set()
+
+    def _create_window(self):
         self.win = GfxWidget(self)
         self.win.resize(self.width, self.height)
         self.win.show()
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.start(16)
-        self.ready.set()
-        return self.app.exec()
+
+    def close(self):
+        with self.lock:
+            self.closed = True
+        if self.win is not None:
+            self.win.close()
