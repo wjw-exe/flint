@@ -5,4 +5,4 @@ build/
 __pycache__/
 *.spec
 *.log
-*.exe
+*.exeflint_examples.zip
