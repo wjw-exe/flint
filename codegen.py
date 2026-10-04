@@ -1051,12 +1051,16 @@ class CodeGen:
         if c.name in UI_TRAPS:
             trap = UI_TRAPS[c.name]
             sp = UI_STR_POS.get(trap)
+            # 参数依次求值入栈(与 gfx 同款): 防 str()/LDA 等子调用破坏已装载的 r0..rN
             for i, a in enumerate(c.args):
                 if sp is not None and i == sp:
                     self._gen_str_addr(a)
                 else:
                     self.gen_expr(a)
-                self._emit(f"MOV r{i}, r0")
+                self._emit("PUSH r0")
+            n = len(c.args)
+            for i in range(n):               # 反序弹出 → r0..rN
+                self._emit(f"POP r{n - 1 - i}")
             self._emit(f"TRAP {trap}")
             return
         # 用户函数 (v3.0: 缺失参数自动补默认值, 仍从右向左压栈)

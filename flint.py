@@ -44,7 +44,7 @@ from parser import Parser, ParseError
 from typecheck import TypeChecker, TypeCheckError
 from codegen import CodeGen
 
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 
 
 def parse_program(src: str):
