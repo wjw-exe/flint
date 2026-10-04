@@ -245,6 +245,45 @@ class AsmGen:
             "    cmpl %edx, %eax",
             "    cmovg %edx, %eax",
             "    ret",
+            "flt_itoa:",                # edi=数字, rsi=缓冲 → 十进制字符串(带负号), rax=缓冲
+            "    pushq %rbx",
+            "    pushq %r12",
+            "    pushq %r13",
+            "    movl %edi, %ebx",
+            "    movq %rsi, %r12",
+            "    xorl %r13d, %r13d",
+            "    testl %ebx, %ebx",
+            "    jge 1f",
+            "    negl %ebx",
+            "    movl $1, %r13d",
+            "1:  leaq 15(%r12), %rsi",        # 从尾部向前写
+            "    movb $0, (%rsi)",
+            "2:  movl %ebx, %eax",
+            "    xorl %edx, %edx",
+            "    movl $10, %ecx",
+            "    divl %ecx",
+            "    addl $48, %edx",
+            "    decl %rsi",
+            "    movb %dl, (%rsi)",
+            "    movl %eax, %ebx",
+            "    testl %ebx, %ebx",
+            "    jne 2b",
+            "    testl %r13d, %r13d",
+            "    je 3f",
+            "    decl %rsi",
+            "    movb $45, (%rsi)",
+            "3:  movq %r12, %rdi",
+            "4:  movzbl (%rsi), %eax",
+            "    movb %al, (%rdi)",
+            "    incq %rsi",
+            "    incq %rdi",
+            "    testb %al, %al",
+            "    jne 4b",
+            "    movq %r12, %rax",
+            "    popq %r13",
+            "    popq %r12",
+            "    popq %rbx",
+            "    ret",
             "", ".section .rodata",
             ".Ltrap1: .ascii \"\\xe8\\xbf\\x90\\xe6\\x97\\xb6\\xe8\\xbf\\x9b\\xe9\\x99\\xb7\\xe4\\xba\\x95: \\xe7\\xb4\\xa2\\xe5\\xbc\\x95\\xe8\\xb6\\x8a\\xe7\\x95\\x8c\\n\"",
             ".Ltrap2: .ascii \"\\xe8\\xbf\\x90\\xe6\\x97\\xb6\\xe8\\xbf\\x9b\\xe9\\x99\\xb7\\xe4\\xba\\x95: \\xe9\\x99\\xa4\\xe9\\x9b\\xb6\\xe9\\x94\\x99\\xe8\\xaf\\xaf\\n\"",
@@ -407,7 +446,8 @@ class AsmGen:
                     "fill_circle": "void", "draw_line": "void", "draw_char": "void",
                     "poll_key": "i32", "window_closed": "i32", "present": "void",
                     "getch": "i32", "clrscr": "void", "sleep": "void",
-                    "sqrt": "i32", "gcd": "i32", "clamp": "i32"}.get(e.name)
+                    "sqrt": "i32", "gcd": "i32", "clamp": "i32",
+                    "str": "str"}.get(e.name)
             if t is not None:
                 return t
             f = self.funcs.get(e.name)
@@ -1145,6 +1185,14 @@ class AsmGen:
             self._emit_label(l_done)
             self._emit("addq $16, %rsp")
             self._stack_off -= 16
+            return
+        if c.name == "str":
+            self.gen_expr(c.args[0])     # rax = 数字
+            self._pushq()
+            slot = self._new_str_slot()
+            self._emit(f"leaq {slot}(%rip), %rsi")   # rsi = 缓冲
+            self._popq("%rdi")            # rdi = 数字
+            self._emit("call flt_itoa")
             return
         if c.name == "sqrt":
             self.gen_expr(c.args[0])

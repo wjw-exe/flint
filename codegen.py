@@ -79,7 +79,10 @@ class CodeGen:
         self.str_n += 1
         lab = f"__s{self.str_n}"
         data = val.encode("utf-8")
-        self.data_lines.append(f"{lab}: DB {', '.join(str(b) for b in data)}, 0")
+        if data:
+            self.data_lines.append(f"{lab}: DB {', '.join(str(b) for b in data)}, 0")
+        else:
+            self.data_lines.append(f"{lab}: DB 0")   # v3.1: 空字符串仅结尾 0
         return lab
 
     def _new_str_slot(self):
@@ -290,7 +293,8 @@ class CodeGen:
                     "window": "void", "clear": "void", "fill_rect": "void",
                     "fill_circle": "void", "draw_line": "void", "draw_char": "void",
                     "poll_key": "i32", "window_closed": "i32", "present": "void",
-                    "sqrt": "i32", "gcd": "i32", "clamp": "i32"}.get(e.name)
+                    "sqrt": "i32", "gcd": "i32", "clamp": "i32",
+                    "str": "str"}.get(e.name)
             if t is not None:
                 return t
             f = self.funcs.get(e.name)      # v3.0: 用户函数调用的返回类型
@@ -975,6 +979,14 @@ class CodeGen:
             self._emit(f"JMP {lscan}")
             self._emit(f"{ldone}:")
             self._emit("MOV r0, r3")
+            return
+        if c.name == "str":
+            self.gen_expr(c.args[0])       # r0 = 数字
+            self._emit("PUSH r0")
+            slot = self._new_str_slot()
+            self._emit(f"LDA r1, {slot}")  # r1 = 目标缓冲(池槽)
+            self._emit("POP r0")
+            self._emit("TRAP 17")          # 十进制字符串写入 r1, 结果地址 → r0
             return
         if c.name == "sqrt":
             self.gen_expr(c.args[0])

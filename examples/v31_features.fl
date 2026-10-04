@@ -1,0 +1,30 @@
+# v3.1 特性演示: 字符字面量 'a' + str(i32) 数字转字符串
+# 配合 v3.0 的运行时拼接, 输出格式完全 Python 风格
+
+def main() -> i32:
+    # ---- 字符字面量: 'a' 是 i32 字符码 (与 s[i] 语义一致) ----
+    c1: i32 = 'A'
+    c2: i32 = '\n'                 # 转义字符
+    print(c1, c2)                  # 65 10
+    if 'a' < 'b':
+        print(1)                   # 1 (字符按码值比较, 就是 i32)
+    name: str = "Flint"
+    print(name[0], name[0] == 'F') # 70 1 (s[i] 与字符字面量可直接比较)
+
+    # ---- str(i32): 数字转字符串, 配合拼接 ----
+    i: i32 = 0
+    s: str = ""
+    while i < 3:
+        s = s + "item[" + str(i) + "]=" + str(i * i) + "; "
+        i += 1
+    print(s)                       # item[0]=0; item[1]=1; item[2]=4;
+    print("x=" + str(-42) + " y=" + str(123456789))   # 负数与多位
+    print("len=" + str(len(s)))    # str(内置返回值)
+
+    # ---- 字符字面量参与算术(编译期常量) ----
+    total: i32 = 'a' + 'b' - 'a'   # 98
+    print(total)                   # 98
+    print('Z' - 'A')               # 25
+
+    print("done")                  # 双引号字符串照常
+    return 0

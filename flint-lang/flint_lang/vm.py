@@ -313,6 +313,15 @@ class VM:
                 elif imm16 == 16:
                     x = isa.to_i32(regs[0]); lo = isa.to_i32(regs[1]); hi = isa.to_i32(regs[2])
                     regs[rd] = isa.to_u32(lo if x < lo else hi if x > hi else x)  # clamp
+                elif imm16 == 17:
+                    # str(x): 十进制字符串写入 r1 指向的缓冲(带负号), 结果地址 → rd
+                    n = isa.to_i32(regs[0])
+                    buf = regs[1]
+                    txt = str(n).encode("ascii")
+                    for i, b in enumerate(txt):
+                        self.store_byte(buf + i, b)
+                    self.store_byte(buf + len(txt), 0)
+                    regs[rd] = buf
                 elif 20 <= imm16 <= 28:
                     # 2D 游戏引擎系统调用: window/clear/fill_rect/fill_circle/
                     # draw_line/draw_char/poll_key/window_closed/present

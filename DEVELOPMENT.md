@@ -306,7 +306,8 @@ VM 后端纵向：`fib(15)` 62ms→1.0ms、`sum 1e6` 18.6s→2.2ms、列表遍�
 ### 18.2 运行时字符串拼接与比较（新 ISA 指令）
 
 - STRCAT 0x25：STRCAT rd, rs1, rs2 —— 把 rs1、rs2 两个 0 结尾字符串**无缝拼接**到 rd 指向的缓冲（第二串覆盖第一串结尾 0；VM 实现于 vm.py，原生后端对应 lt_strcat 助手）。
-- STRCMP 0x26：STRCMP rd, rs1, rs2 —— d = -1/0/1 无符号字节字典序（VM 实现；原生 lt_strcmp）。
+- STRCMP 0x26：STRCMP rd, rs1, rs2 —— 
+d = -1/0/1 无符号字节字典序（VM 实现；原生 lt_strcmp）。
 - codegen _gen_binop：str + str → 分配 256B 池槽（__sbN，编译期数据段）→ STRCAT；比较 == != < > <= >= → STRCMP + 布尔映射。
 - **已知边界**：每个拼接表达式独立占 256B 池槽（编译期分配）；拼接结果超 256B 会越界（TRAP 1）；嵌套/长串注意内存 64KB 总量。
 
@@ -324,3 +325,17 @@ VM 后端纵向：`fib(15)` 62ms→1.0ms、`sum 1e6` 18.6s→2.2ms、列表遍�
 - 新增 examples/v30_features.fl（全部新特性演示）；smoke_tests.py 增至 **11 个用例**（10 旧 + v30）。
 - 双后端一致性：codegen.py（VM 链）与 asm.py（x86 链）同步实现；回归 = smoke_tests.py 11/11 + lint-lang/tests/run_tests.py 17/17 + gfx 模式 offscreen 5 帧 exit 0。
 - 已知边界：asm.py 的原生 lt_* 助手为 x86-64 Linux/macOS syscall 环境（同 §8.4）；Windows 无 gcc 时走 VM 模式，功能等价。
+
+
+## 19. v3.1 小迭代记录（2026-10-04）
+
+1. **字符字面量 `'a'`**：lexer 单引号单字符 → `CHAR` token（字符码），多字符报错提示用双引号；
+   parser `parse_primary` 转 `IntLit`（与 `s[i]` 返回字符码的语义一致）；天然参与常量折叠与算术。
+2. **`str(i32)` 数字转字符串**：parser 识别 `str(...)`（TYPE token 分支）→ 内置签名 `(i32) -> str`；
+   codegen 分配 256B 池槽 → `TRAP 17`（VM 实现十进制带负号写入缓冲）；原生后端 `flt_itoa` 助手
+   （divl 循环 + 符号处理 + 就地回拷；INT_MIN 边界已知）。配合 v3.0 `STRCAT` 可实现
+   `print("i=" + str(i))` 完整 Python 风格格式化。
+3. **修复**：空字符串初始化 `""` 曾生成 `DB , 0`（空数据行导致汇编器 `_split_data_items` 空 item 崩溃），
+   现改为 `DB 0`。
+4. **版本**：`flint.py`/`flint_ide.py` → 3.1.0；新增 `examples/v31_features.fl`；smoke 增至 **12 项**。
+5. **回归**：smoke 12/12 + flint-lang 17/17 + gfx offscreen 5 帧 exit 0；打包后实测同款通过。

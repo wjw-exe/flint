@@ -29,6 +29,9 @@ CASES = [
     ("echo.fl", []),  # 读取 stdin(EOF 即正常结束)
     # v3.0: 条件表达式 / 默认参数 / 运行时字符串拼接与比较 / sqrt / gcd / clamp
     ("v30_features.fl", ["Hello, World!", "Hi, Doubao!", "abcFlint", "10", "42", "12", "100", "50"]),
+    # v3.1: 字符字面量 'a' + str(i32) 数字转字符串
+    ("v31_features.fl", ["65 10", "1", "70 1", "item[0]=0; item[1]=1; item[2]=4;",
+                         "x=-42 y=123456789", "len=33", "98", "25", "done"]),
 ]
 
 

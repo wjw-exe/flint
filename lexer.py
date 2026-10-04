@@ -97,7 +97,14 @@ def tokenize(src: str):
             if kind == "num":
                 tokens.append(("NUM", int(val), lineno))
             elif kind == "str":
-                tokens.append(("STR", _unescape(val), lineno))
+                if val.startswith("'"):
+                    # v3.1 字符字面量: 'a' → 字符码 i32 (与 s[i] 语义一致)
+                    body = _unescape(val)
+                    if len(body) != 1:
+                        raise LexError(f"第 {lineno} 行: 字符字面量必须恰好 1 个字符(多字符请用双引号字符串)")
+                    tokens.append(("CHAR", ord(body), lineno))
+                else:
+                    tokens.append(("STR", _unescape(val), lineno))
             elif kind == "id":
                 if val in KEYWORDS:
                     tokens.append(("KW", val, lineno))

@@ -1,4 +1,4 @@
-# Flint v3.0 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
+# Flint v3.1 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
 
 > 上一版 Flint 是类 C 大括号语法。v2 重写前端，**语法接近 Python**（缩进、`def`、`if`/`elif`/`else`、`while`、`for … in range(…)`），
 > 但它是**编译型**语言：源码 → 词法/语法/类型检查 → 生成汇编 → 机器码。
@@ -10,6 +10,9 @@
 > **v3.0 语言大版本**（游戏引擎不动）：① 条件表达式 `a if c else b`；② **默认参数值** `def f(x: i32, y: i32 = 10)`；
 > ③ **运行时字符串拼接与比较**（新增 `STRCAT`/`STRCMP` 指令，`s + t`、`s == t`、字典序 `<`/`>` 全支持）；
 > ④ 新内置 `sqrt / gcd / clamp`（TRAP 14-16，双后端同步）；⑤ 新增 `examples/v30_features.fl` 演示。
+> **v3.1 小迭代**：① **字符字面量** `'a'`（单引号单字符 → 字符码 i32，与 `s[i]` 语义一致，可参与算术）；
+> ② **`str(i32)` 数字转字符串**（TRAP 17，双后端同步），配合 v3.0 拼接实现完整 Python 风格格式化
+> `print("i=" + str(i))`；③ 修复空字符串初始化生成非法数据行（`DB , 0` → `DB 0`）。
 
 ## 为什么比 Python 快
 
@@ -151,7 +154,7 @@ def main() -> i32:
 - 条件表达式：`a if cond else b`（v3.0, 右结合可嵌套）
 - 优先级与 Python 一致：`not` > 比较 > `and` > `or`
 - 内置函数：`print(a, b, ...)`（自动换行, 空格分隔）、`input()`、`len(xs|s)`、`abs(x)`、
-  `min/max/sum/pow`、`sqrt(x)`、`gcd(a, b)`、`clamp(x, lo, hi)`（v3.0）、
+  `min/max/sum/pow`、`sqrt(x)`、`gcd(a, b)`、`clamp(x, lo, hi)`（v3.0）、`str(x)`（v3.1 数字转字符串）、
   `getch(ms)`/`clrscr()`/`sleep(ms)`（终端）、`window/clear/fill_rect/...`（图形, 见 gfx 模式）
 
 ## 快速开始
@@ -162,7 +165,7 @@ def main() -> i32:
 py flint.py run examplesib.fl          :: VM 模式 → 610
 py flint.py run examplesubble_sort.fl
 py flint.py asm examplesib.fl          :: 查看编译出的 VM 汇编
-py smoke_tests.py                        :: 仓库自检: 10 个示例全部通过
+py smoke_tests.py                        :: 仓库自检: 12 个示例全部通过
 ```
 
 图形 IDE：`pip install PyQt6` 后 `py flint_ide.py examples\lists.fl`；
@@ -245,6 +248,7 @@ AT&T 汇编 (可读, 可人工检查)
 - **i32 32 位回绕**：`sum 0..999999` 超出 2³¹ 后回绕（Python 无界大整数, 会得到精确值）——性能换来的确定性
 - 列表是**静态定长**：`list[i32]` 由字面量定长, `list[i32; N]` 显式定长（零初始化）；总内存受 VM 64KB 限制
 - 字符串：字面量拼接编译期折叠（v2.1）；**运行时拼接/比较**（v3.0, `STRCAT`/`STRCMP` 指令, 每个拼接表达式分配一个 256B 池槽, 拼接结果过长会越界报错）；`s[i]` 返回字符码 i32
+- **字符字面量** `'a'` → i32 字符码（v3.1, 与 `s[i]` 语义一致）；**`str(i32)`** 数字转字符串（v3.1, 十进制带负号, 配合拼接做格式化输出）
 - 默认参数值必须是字面量（v3.0）；有默认值的参数之后不能再有无默认值参数（与 Python 规则一致）
 - 无字典/类/对象/闭包/GC；`for … else`、`try` 等未实现
 - 全局变量是只读的（无 `global` 关键字, 函数内同名赋值会创建局部变量, 与 Python 一致）

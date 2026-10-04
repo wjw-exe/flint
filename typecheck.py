@@ -475,6 +475,12 @@ class TypeChecker:
                 if self.expr(a) != "i32":
                     raise TypeCheckError(c.line, "clamp 的参数必须是 i32")
             return "i32"
+        if c.name == "str":
+            if len(c.args) != 1:
+                raise TypeCheckError(c.line, "str 需要 1 个参数: str(i32)")
+            if self.expr(c.args[0]) != "i32":
+                raise TypeCheckError(c.line, f"str 的参数必须是 i32, 得到 {type_str(self.expr(c.args[0]))}")
+            return "str"
         if c.name not in self.funcs:
             raise TypeCheckError(c.line, f"函数 {c.name} 未定义")
         f = self.funcs[c.name]

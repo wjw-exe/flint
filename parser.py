@@ -674,6 +674,15 @@ class Parser:
         if k[0] == "STR":
             self.next()
             return StrLit(k[2], k[1])
+        if k[0] == "CHAR":
+            self.next()
+            return IntLit(k[2], k[1])        # v3.1: 字符字面量 → 字符码 i32
+        if k[0] == "TYPE" and k[1] == "str":
+            self.next()
+            self.expect("OP", "(")
+            arg = self.parse_expr()
+            self.expect("OP", ")")
+            return Call(k[2], "str", [arg])  # v3.1: str(i32) 数字转字符串
         if k[0] == "KW" and k[1] in ("True", "False"):
             self.next()
             return BoolLit(k[2], k[1] == "True")
