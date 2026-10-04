@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-typecheck.py — Flint v3.1 静态类型检查器。
+typecheck.py — Flint v3.2.1 静态类型检查器。
 
 编译期完成全部类型校验, 类型错误直接编译失败, 运行时零类型开销
 (这正是比 Python 快的关键之一: 没有动态类型探测)。

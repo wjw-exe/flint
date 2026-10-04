@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-flint_ui.py — Flint 纯 UI 库引擎 (PyQt6)
+flint_ui.py — Flint v3.2.1 纯 UI 库引擎 (PyQt6)
 
 哲学: **纯 UI, 一切计算交给后端**。
 * 引擎只负责: 组件创建/渲染/输入事件捕获(按钮点击、滑块拖动、复选框)

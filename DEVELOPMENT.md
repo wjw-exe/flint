@@ -364,3 +364,40 @@ set_text)在 VM 侧读 0 结尾 UTF-8 解码。
    现改为 `DB 0`。
 4. **版本**：`flint.py`/`flint_ide.py` → 3.1.0；新增 `examples/v31_features.fl`；smoke 增至 **12 项**。
 5. **回归**：smoke 12/12 + flint-lang 17/17 + gfx offscreen 5 帧 exit 0；打包后实测同款通过。
+
+## 20. v3.2 纯 UI 库记录（2026-10-04）
+
+1. **新增 `flint_ui.py`**（PyQt6 `UiEngine`）：组件渲染/输入捕获与 VM 线程解耦（命令队列+锁）。
+   组件：`ui_window(340,290)` / `ui_button(x,y,w,h,"标签")` / `ui_label(x,y,"文本")` /
+   `ui_slider(x,y,w,min,max,val)` / `ui_progress(x,y,w,val)` / `ui_checkbox(x,y,"标签")`。
+2. **状态轮询**：`ui_clicked(id)`（边沿触发，仅返回 1 一帧）/ `ui_value(id)`（滑块值）/
+   `ui_checked(id)`（0/1）/ `ui_closed()`（窗口关闭）；更新：`ui_set_text` / `ui_set_value`；
+   刷帧：`ui_present()`。
+3. **TRAP 29-41 映射**：29 ui_window 30 ui_button 31 ui_label 32 ui_slider 33 ui_progress
+   34 ui_checkbox 35 ui_clicked 36 ui_value 37 ui_checked 38 ui_set_text 39 ui_set_value
+   40 ui_present 41 ui_closed。参数按序进 r0..r5；str 参数在 VM 侧 `_cstr()` 解码后传引擎，
+   引擎不碰 VM 内存。前端同步：typecheck `UI_SIG` / codegen `UI_TRAPS`+`UI_STR_POS` /
+   asm.py 对 ui_* 抛 AsmError（原生后端无 Qt 环境）。
+4. **设计哲学**：纯 UI——引擎只画组件、收输入；业务逻辑全写在后端 .fl 轮询循环里，
+   无回调、无对象，控件用整数 ID 引用。
+5. **示例** `examples/ui_calc.fl`：340x290 计算器，17 按钮 + 显示标签；后端 acc/op/cur/fresh
+   状态机四则运算（逐次无优先级、除零保护、连续运算符只换 op），UI 侧零逻辑。
+6. **命令**：`flint.py ui <文件.fl> [--frames N]`（cmd_ui：编译→汇编→VM(gfx=UiEngine)→线程）。
+7. **版本**：flint.py/flint_ide.py → 3.2.0；GitHub tag v3.2。
+
+## 21. v3.2.1 自动路由记录（2026-10-04）
+
+1. **问题**：用户多次用 `run` 跑 UI 程序（计算器）报 "UI 内置(TRAP 29)只能在 ui 模式下使用"——
+   模式误用（UI 程序需 `ui`、图形程序需 `gfx`、终端程序用 `run`）。
+2. **修复**：`cmd_run` 编译出汇编后检测引擎 TRAP——命中 `TRAP (29|3\d|4[01])` 自动切 `cmd_ui`、
+   命中 `TRAP (2[0-8])` 自动切 `cmd_gfx`；普通程序保持 VM 终端输出。`ui`/`gfx` 命令保留。
+3. **验证**：`run ui_calc.fl` / `run gfx_snake.fl` / `run fib.fl` 三路实测 exit 0；
+   smoke 12/12 + flint-lang 17/17；打包后新 exe 同款通过。
+4. **版本**：flint.py/flint_ide.py → 3.2.1；文件头标注统一 v3.2.1；README 同步；
+   GitHub tag v3.2.1。
+
+## 22. 构建与发布速查（v3.2.1）
+
+- 打包：`cd 工作目录; $env:PYTHONPATH="$PWD\.env\site-packages"; py -3 -m PyInstaller -y --onefile --name flint --paths flint-lang flint.py`（IDE 同理 --name flint-ide flint_ide.py）；打完 `xcopy /e /i /y /q examples dist\examples`。
+- 发布：`git add -A; git commit -m "vX.Y.Z: ..."; git push origin main; git tag -a vX.Y.Z -m "..."; git push origin vX.Y.Z`（GCM 凭据直接 push）。
+- 回归：`py -3 smoke_tests.py`（12/12）+ `py -3 flint-lang	estsun_tests.py`（17/17）+ gfx/ui offscreen 帧测试。

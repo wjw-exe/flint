@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Flint v3.1 — Python 风格缩进、静态类型、编译型语言。
+Flint v3.2.1 — Python 风格缩进、静态类型、编译型语言。
 
 用法:
   python3 flint.py run  examples/fib.fl  [--input 文件] [--trace] [--stats]
