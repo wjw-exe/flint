@@ -1,4 +1,4 @@
-# Flint v3.2.0 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
+# Flint v3.2.1 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
 
 > 上一版 Flint 是类 C 大括号语法。v2 重写前端，**语法接近 Python**（缩进、`def`、`if`/`elif`/`else`、`while`、`for … in range(…)`），
 > 但它是**编译型**语言：源码 → 词法/语法/类型检查 → 生成汇编 → 机器码。
@@ -13,6 +13,13 @@
 > **v3.1 小迭代**：① **字符字面量** `'a'`（单引号单字符 → 字符码 i32，与 `s[i]` 语义一致，可参与算术）；
 > ② **`str(i32)` 数字转字符串**（TRAP 17，双后端同步），配合 v3.0 拼接实现完整 Python 风格格式化
 > `print("i=" + str(i))`；③ 修复空字符串初始化生成非法数据行（`DB , 0` → `DB 0`）。
+> **v3.2 纯 UI 库**（引擎不动）：`ui_window/ui_button/ui_label/ui_slider/ui_progress/ui_checkbox` 组件
+> + `ui_clicked(边沿)/ui_value/ui_checked` 轮询 + `ui_set_text/ui_set_value` 更新 + `ui_present/ui_closed`。
+> 新增 `ui` 命令与 `examples/ui_calc.fl` 计算器示例。**设计哲学：UI 只负责渲染与输入捕获，
+> 一切计算由后端 .fl 代码完成**（无回调、无对象，控件用整数 ID 引用，状态轮询）。
+> **v3.2.1 体验改进**：`run` 命令**自动路由**——编译后检测引擎 TRAP，UI 程序自动切 `ui` 模式弹窗、
+> 图形程序自动切 `gfx` 模式弹窗，普通程序保持终端输出。以后用 `run` 跑任何程序都不会再报
+> "UI 内置只能在 ui 模式下使用"。
 
 ## 为什么比 Python 快
 
