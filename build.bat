@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Flint v2.2 - Windows 一键环境构建
+title Flint v3.2.1 - Windows 一键环境构建
 
 echo.
 echo  ============================================================
-echo    Flint v2.2 - Windows 一键环境构建
+echo    Flint v3.2.1 - Windows 一键环境构建
 echo    (依赖装入 .env, C盘项目目录内, 不占用 D 盘)
 echo  ============================================================
 echo.
