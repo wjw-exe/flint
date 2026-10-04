@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-parser.py — Flint v2.1 递归下降解析器。
+parser.py — Flint v3.0 递归下降解析器。
 
 把 token 流解析为抽象语法树(AST)。语法与 Python 高度一致:
   def 函数定义 / if-elif-else / while / for x in range(...) / for x in xs
@@ -52,12 +52,23 @@ class Program(Node):
 
 
 class FuncDef(Node):
-    def __init__(self, line, name, params, ret, body):
+    def __init__(self, line, name, params, ret, body, defaults=None):
         super().__init__(line)
         self.name = name
         self.params = params      # [(名字, 类型), ...]
         self.ret = ret            # 类型 或 None(void)
         self.body = body
+        self.defaults = defaults or []   # v3.0: 与 params 对齐的默认值列表(无默认处为 None)
+
+
+class Ternary(Node):
+    """条件表达式: a if c else b (Python 风格三目, v3.0)"""
+
+    def __init__(self, line, cond, if_expr, else_expr):
+        super().__init__(line)
+        self.cond = cond
+        self.if_expr = if_expr
+        self.else_expr = else_expr
 
 
 class Decl(Node):
@@ -306,12 +317,18 @@ class Parser:
         name = self.expect("ID")[1]
         self.expect("OP", "(")
         params = []
+        defaults = []
         if not self.at("OP", ")"):
             while True:
                 pn = self.expect("ID")[1]
                 self.expect("OP", ":")
                 pt = self.parse_type()
+                default = None
+                if self.at("OP", "="):       # v3.0: 默认参数值 def f(x: i32, y: i32 = 10)
+                    self.next()
+                    default = self.parse_expr()
                 params.append((pn, pt))
+                defaults.append(default)
                 if self.at("OP", ","):
                     self.next()
                     continue
@@ -326,7 +343,7 @@ class Parser:
         self.expect("INDENT")
         body = self.parse_block()
         self.expect("DEDENT")
-        return FuncDef(line, name, params, ret, body)
+        return FuncDef(line, name, params, ret, body, defaults)
 
     def parse_block(self):
         stmts = []
@@ -526,7 +543,15 @@ class Parser:
 
     # ---------- 表达式 ----------
     def parse_expr(self):
-        return self.parse_or()
+        node = self.parse_or()
+        if self.at("KW", "if"):            # v3.0: 条件表达式 a if c else b (右结合)
+            line = node.line
+            self.next()
+            cond = self.parse_or()
+            self.expect("KW", "else")
+            else_e = self.parse_expr()
+            return Ternary(line, cond, node, else_e)
+        return node
 
     def parse_or(self):
         node = self.parse_and()

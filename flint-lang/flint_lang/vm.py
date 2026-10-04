@@ -10,6 +10,7 @@ flint_lang.vm — 燧石虚拟机 (FlintVM)。
 * 逐步跟踪与统计
 """
 
+import math
 import sys
 from . import isa
 
@@ -213,6 +214,42 @@ class VM:
             elif name == "SHR":
                 r = regs[rs1] >> (regs[rs2] & 31)
                 regs[rd] = isa.to_u32(r); self._set_alu_flags(r)
+            elif name == "STRCAT":
+                # rd = 目标缓冲地址; 依次拷贝 rs1、rs2 两个 0 结尾字符串(含结尾 0)
+                dst = regs[rd]
+                src = regs[rs1]
+                i = 0
+                while True:
+                    b = self.load_byte(src + i)
+                    self.store_byte(dst + i, b)
+                    i += 1
+                    if b == 0:
+                        break
+                src = regs[rs2]
+                j = 0
+                while True:
+                    # 从 dst + (i-1) 起写: 覆盖第一个串的结尾 0, 两串无缝连接
+                    b = self.load_byte(src + j)
+                    self.store_byte(dst + (i - 1) + j, b)
+                    j += 1
+                    if b == 0:
+                        break
+            elif name == "STRCMP":
+                # rd = -1/0/1: 字典序比较 rs1 与 rs2(逐字节无符号)
+                a = regs[rs1]
+                b = regs[rs2]
+                i = 0
+                res = 0
+                while True:
+                    x = self.load_byte(a + i)
+                    y = self.load_byte(b + i)
+                    if x != y:
+                        res = -1 if x < y else 1
+                        break
+                    if x == 0:
+                        break
+                    i += 1
+                regs[rd] = isa.to_u32(res)
             elif name == "CMP":
                 self._set_cmp_flags(regs[rd], regs[rs2])
             elif name == "CMPI":
@@ -266,6 +303,16 @@ class VM:
                 elif imm16 == 12:
                     import time
                     time.sleep(max(0.0, isa.to_i32(regs[0]) / 1000.0))   # sleep(ms)
+                elif imm16 == 14:
+                    x = isa.to_i32(regs[0])
+                    regs[rd] = isa.to_u32(math.isqrt(x) if x >= 0 else 0)   # sqrt: 负数 → 0
+                elif imm16 == 15:
+                    a = abs(isa.to_i32(regs[0]))
+                    b = abs(isa.to_i32(regs[1]))
+                    regs[rd] = isa.to_u32(math.gcd(a, b))                   # gcd
+                elif imm16 == 16:
+                    x = isa.to_i32(regs[0]); lo = isa.to_i32(regs[1]); hi = isa.to_i32(regs[2])
+                    regs[rd] = isa.to_u32(lo if x < lo else hi if x > hi else x)  # clamp
                 elif 20 <= imm16 <= 28:
                     # 2D 游戏引擎系统调用: window/clear/fill_rect/fill_circle/
                     # draw_line/draw_char/poll_key/window_closed/present

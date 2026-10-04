@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Flint v2 — Python 风格缩进、静态类型、编译型语言。
+Flint v3 — Python 风格缩进、静态类型、编译型语言。
 
 用法:
   python3 flint.py run  examples/fib.fl  [--input 文件] [--trace] [--stats]
@@ -11,7 +11,7 @@ Flint v2 — Python 风格缩进、静态类型、编译型语言。
 
 底层复用 flint-lang 的汇编器与虚拟机(需与本目录同级存放);
 --native / native 走 asm.py: 直接生成 x86-64 AT&T 汇编(gcc 仅做汇编与链接, 不再经过 C)。
-v2.2 已移除 native.py 的 C 后端。
+v3.0 新增: 条件表达式 a if c else b / 默认参数 / 运行时字符串拼接与比较 / sqrt、gcd、clamp。
 """
 
 import os
@@ -42,7 +42,7 @@ from parser import Parser, ParseError
 from typecheck import TypeChecker, TypeCheckError
 from codegen import CodeGen
 
-__version__ = "2.2.0"
+__version__ = "3.0.0"
 
 
 def parse_program(src: str):

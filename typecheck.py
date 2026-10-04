@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-typecheck.py — Flint v2.1 静态类型检查器。
+typecheck.py — Flint v3.0 静态类型检查器。
 
 编译期完成全部类型校验, 类型错误直接编译失败, 运行时零类型开销
 (这正是比 Python 快的关键之一: 没有动态类型探测)。
@@ -18,7 +18,7 @@ v2.1 新增:
 from parser import (Program, FuncDef, Decl, Assign, IndexAssign, AugAssign,
                     Return, If, While, For, Break, Continue, Pass, ExprStmt,
                     BinOp, Unary, Call, Var, Index, IntLit, BoolLit, StrLit,
-                    ListLit, type_str)
+                    ListLit, Ternary, type_str)
 
 ARITH_OPS = ("+", "-", "*", "/", "%")
 FLOOR_OPS = ("//",)
@@ -59,6 +59,24 @@ class TypeChecker:
             self.funcs[f.name] = f
         if "main" not in self.funcs:
             raise TypeCheckError(1, "缺少入口函数 main()")
+
+        # v3.0: 默认参数规则 —— 有默认值的参数之后不能再有无默认值参数
+        for f in prog.funcs:
+            seen_default = False
+            for i, (pn, pt) in enumerate(f.params):
+                d = (f.defaults or [])[i] if i < len(f.defaults or []) else None
+                if d is not None:
+                    seen_default = True
+                    t = self.expr(d)
+                    if not self._type_match(pt, t):
+                        raise TypeCheckError(f.line,
+                            f"参数 {pn} 的默认值类型应为 {type_str(pt)}, 得到 {type_str(t)}")
+                    if not self._is_literal(d):
+                        raise TypeCheckError(f.line,
+                            f"参数 {pn} 的默认值必须是字面量(数字/True/False/字符串)")
+                elif seen_default:
+                    raise TypeCheckError(f.line,
+                        f"函数 {f.name}: 有默认值的参数之后不能有无默认值参数")
 
         for f in prog.funcs:
             self.ret = f.ret
@@ -276,6 +294,15 @@ class TypeChecker:
             if elem not in ("i32", "bool"):
                 raise TypeCheckError(e.line, f"列表元素仅支持 i32/bool, 得到 {elem}")
             return ("list", elem, len(e.elems))
+        if isinstance(e, Ternary):
+            ct = self.expr(e.cond)
+            if ct != "bool":
+                raise TypeCheckError(e.line, f"条件表达式的条件必须是 bool, 得到 {type_str(ct)}")
+            it = self.expr(e.if_expr)
+            et = self.expr(e.else_expr)
+            if it != et:
+                raise TypeCheckError(e.line, f"条件表达式两分支类型不一致: {type_str(it)} 和 {type_str(et)}")
+            return it
         if isinstance(e, Var):
             if e.name in self.scope:
                 return self.scope[e.name]
@@ -316,7 +343,7 @@ class TypeChecker:
                 return "bool"
             if e.op in ARITH_OPS or e.op in FLOOR_OPS:
                 if e.op == "+" and lt == "str" and rt == "str":
-                    raise TypeCheckError(e.line, "字符串拼接只支持字面量(编译期自动折叠), 如 \"a\" + \"b\"")
+                    return "str"          # v3.0: 运行时字符串拼接 s + t (每表达式分配一个 256B 缓冲)
                 if lt != "i32" or rt != "i32":
                     raise TypeCheckError(e.line, f"算术运算 {e.op} 两侧必须是 i32, 得到 {type_str(lt)} 和 {type_str(rt)}")
                 return "i32"
@@ -338,8 +365,11 @@ class TypeChecker:
                     raise TypeCheckError(e.line, f"in 右侧必须是 list 或 str, 得到 {type_str(rt)}")
                 if lt != rt:
                     raise TypeCheckError(e.line, f"比较 {e.op} 两侧类型不一致: {type_str(lt)} 和 {type_str(rt)}")
-                if lt not in ("i32", "bool"):
-                    raise TypeCheckError(e.line, f"不能比较 {type_str(lt)} 类型(str 内容比较未实现)")
+                if lt in ("i32", "bool"):
+                    return "bool"
+                if lt == "str":
+                    return "bool"          # v3.0: 字符串字典序比较 == != < > <= >=
+                raise TypeCheckError(e.line, f"不能比较 {type_str(lt)} 类型")
                 return "bool"
             raise TypeCheckError(e.line, f"未知运算符 {e.op}")
 
@@ -426,11 +456,32 @@ class TypeChecker:
             if self.expr(c.args[0]) != "i32" or self.expr(c.args[1]) != "i32":
                 raise TypeCheckError(c.line, "pow 的参数必须是 i32")
             return "i32"
+        if c.name == "sqrt":
+            if len(c.args) != 1:
+                raise TypeCheckError(c.line, "sqrt 需要 1 个参数: sqrt(x) (整数平方根向下取整)")
+            if self.expr(c.args[0]) != "i32":
+                raise TypeCheckError(c.line, "sqrt 的参数必须是 i32")
+            return "i32"
+        if c.name == "gcd":
+            if len(c.args) != 2:
+                raise TypeCheckError(c.line, "gcd 需要 2 个参数: gcd(a, b)")
+            if self.expr(c.args[0]) != "i32" or self.expr(c.args[1]) != "i32":
+                raise TypeCheckError(c.line, "gcd 的参数必须是 i32")
+            return "i32"
+        if c.name == "clamp":
+            if len(c.args) != 3:
+                raise TypeCheckError(c.line, "clamp 需要 3 个参数: clamp(x, lo, hi)")
+            for a in c.args:
+                if self.expr(a) != "i32":
+                    raise TypeCheckError(c.line, "clamp 的参数必须是 i32")
+            return "i32"
         if c.name not in self.funcs:
             raise TypeCheckError(c.line, f"函数 {c.name} 未定义")
         f = self.funcs[c.name]
-        if len(c.args) != len(f.params):
-            raise TypeCheckError(c.line, f"函数 {c.name} 需要 {len(f.params)} 个参数, 实际传入 {len(c.args)}")
+        n_required = len(f.params) - sum(1 for d in (f.defaults or []) if d is not None)
+        if len(c.args) < n_required or len(c.args) > len(f.params):
+            raise TypeCheckError(c.line,
+                f"函数 {c.name} 需要 {n_required}-{len(f.params)} 个参数, 实际传入 {len(c.args)}")
         for (pname, ptype), a in zip(f.params, c.args):
             at = self.expr(a)
             if at != ptype:

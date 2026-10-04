@@ -1,4 +1,4 @@
-# Flint v2.2 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
+# Flint v3.0 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
 
 > 上一版 Flint 是类 C 大括号语法。v2 重写前端，**语法接近 Python**（缩进、`def`、`if`/`elif`/`else`、`while`、`for … in range(…)`），
 > 但它是**编译型**语言：源码 → 词法/语法/类型检查 → 生成汇编 → 机器码。
@@ -6,7 +6,10 @@
 > **v2.2 两项大动作**：① 命令再扩展——位运算 `& | ^ << >> ~`、位复合赋值、`in`/`not in` 成员测试、
 > 新内置 `min/max/sum/pow`、`while-else`/`for-else` 循环 else 子句（全部与 Python 语义一致）；
 > ② **移除 C 后端，改用真正的 x86-64 汇编后端**（`asm.py`）：直接产出 AT&T 汇编，gcc 仅做汇编与链接，
-> 不再经过 C 源码。底层复用 `flint-lang` 汇编器与虚拟机（17 项测试全绿）；v2 前端 38 项 + 汇编后端 12 项 + IDE 9 项全绿。
+> 不再经过 C 源码。底层复用 `flint-lang` 汇编器与虚拟机（17 项测试全绿）。
+> **v3.0 语言大版本**（游戏引擎不动）：① 条件表达式 `a if c else b`；② **默认参数值** `def f(x: i32, y: i32 = 10)`；
+> ③ **运行时字符串拼接与比较**（新增 `STRCAT`/`STRCMP` 指令，`s + t`、`s == t`、字典序 `<`/`>` 全支持）；
+> ④ 新内置 `sqrt / gcd / clamp`（TRAP 14-16，双后端同步）；⑤ 新增 `examples/v30_features.fl` 演示。
 
 ## 为什么比 Python 快
 
@@ -108,6 +111,20 @@ def main() -> i32:
 
     flag: bool = True
     print(flag and not False)   # 短路逻辑 and/or/not
+
+    # ---- v3.0: 条件表达式 / 默认参数 / 运行时字符串拼接与比较 / 数学内置 ----
+    score: i32 = 85
+    grade: str = "A" if score >= 90 else "B"    # 条件表达式(右结合, 可嵌套)
+    print(grade)                                # B
+
+    def clamp0(x: i32, lo: i32 = 0, hi: i32 = 100) -> i32:
+        return clamp(x, lo, hi)                 # 默认参数 + clamp 内置
+    print(clamp0(200), clamp0(-5, -10, -1))     # 100 -5
+
+    name: str = "Flint"
+    print("Hello, " + name + "!")               # 运行时字符串拼接(STRCAT)
+    print(name == "flint", name < "flint")      # 0 1  (字典序比较 STRCMP)
+    print(sqrt(100), gcd(48, 36))               # 10 12
     return 0                    # main 的返回值 = 程序退出码
 ```
 
@@ -129,10 +146,13 @@ def main() -> i32:
 
 - 算术：`+ - * / % //`（`/` 向零截断, `//` 地板除, 均 32 位回绕）
 - 复合赋值：`+= -= *= /= %= //=`
-- 比较：`< > <= >= == !=`（支持链式 `a < b < c`）
+- 比较：`< > <= >= == !=`（支持链式 `a < b < c`；**str 走字典序** v3.0）
 - 逻辑：`and or not`（短路求值）
+- 条件表达式：`a if cond else b`（v3.0, 右结合可嵌套）
 - 优先级与 Python 一致：`not` > 比较 > `and` > `or`
-- 内置函数：`print(a, b, ...)`（自动换行, 空格分隔）、`input()`、`len(xs|s)`、`abs(x)`
+- 内置函数：`print(a, b, ...)`（自动换行, 空格分隔）、`input()`、`len(xs|s)`、`abs(x)`、
+  `min/max/sum/pow`、`sqrt(x)`、`gcd(a, b)`、`clamp(x, lo, hi)`（v3.0）、
+  `getch(ms)`/`clrscr()`/`sleep(ms)`（终端）、`window/clear/fill_rect/...`（图形, 见 gfx 模式）
 
 ## 快速开始
 
@@ -224,7 +244,8 @@ AT&T 汇编 (可读, 可人工检查)
 
 - **i32 32 位回绕**：`sum 0..999999` 超出 2³¹ 后回绕（Python 无界大整数, 会得到精确值）——性能换来的确定性
 - 列表是**静态定长**：`list[i32]` 由字面量定长, `list[i32; N]` 显式定长（零初始化）；总内存受 VM 64KB 限制
-- 字符串只支持字面量拼接（编译期折叠）；`s[i]` 返回字符码 i32
+- 字符串：字面量拼接编译期折叠（v2.1）；**运行时拼接/比较**（v3.0, `STRCAT`/`STRCMP` 指令, 每个拼接表达式分配一个 256B 池槽, 拼接结果过长会越界报错）；`s[i]` 返回字符码 i32
+- 默认参数值必须是字面量（v3.0）；有默认值的参数之后不能再有无默认值参数（与 Python 规则一致）
 - 无字典/类/对象/闭包/GC；`for … else`、`try` 等未实现
 - 全局变量是只读的（无 `global` 关键字, 函数内同名赋值会创建局部变量, 与 Python 一致）
 

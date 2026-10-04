@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-lexer.py — Flint v2.1 词法分析器(缩进感知)。
+lexer.py — Flint v3.0 词法分析器(缩进感知)。
 
 与 Python 一致: 代码块用缩进表示(空格, 4 空格惯例), 生成 INDENT/DEDENT token。
 不支持 Tab 缩进(会直接报错, 避免歧义)。

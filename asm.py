@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "flint-lang"))
 from parser import (Program, FuncDef, Decl, Assign, IndexAssign, AugAssign,
                     Return, If, While, For, Break, Continue, Pass, ExprStmt,
                     BinOp, Unary, Call, Var, Index, IntLit, BoolLit, StrLit,
-                    ListLit)
+                    ListLit, Ternary)
 from typecheck import TypeChecker, TypeCheckError, is_list
 
 REG = {"r0": "%eax", "r1": "%r11d", "r2": "%ecx", "r3": "%edx", "r4": "%esi",
@@ -71,6 +71,7 @@ class AsmGen:
         self.for_list_idx = {}
         self.loop_stack = []
         self.ret_label = None
+        self.str_slot_n = 0            # v3.0: 运行时字符串拼接的临时池槽计数
 
     # ---------- 基础设施 ----------
     def _label(self):
@@ -99,6 +100,13 @@ class AsmGen:
         self.strs[val] = lab
         data = val.encode("utf-8")
         self.ro_lines.append(f"{lab}: .byte {', '.join(str(b) for b in data)}, 0")
+        return lab
+
+    def _new_str_slot(self):
+        """v3.0: 为运行时字符串拼接分配 256 字节临时池槽。"""
+        self.str_slot_n += 1
+        lab = f"__sb{self.str_slot_n}"
+        self.da_lines.append(f"{lab}: .byte {', '.join(['0'] * 256)}")
         return lab
 
     # ---------- 入口 ----------
@@ -132,6 +140,111 @@ class AsmGen:
             "    movl %r10d, %edi",
             "    movl $60, %eax",
             "    syscall",
+            "", 
+            "# ---- v3.0 运行时助手: 字符串拼接/比较/数学 (caller-saved 均已保护) ----",
+            "flt_strcat:",            # rdi=目标缓冲, rsi=源1, rdx=源2 (0 结尾) → 拼接到目标
+            "    pushq %rcx",
+            "    pushq %r8",
+            "    pushq %r9",
+            "    xorl %ecx, %ecx",
+            "1:  movzbl (%rsi,%rcx), %r8d",
+            "    movb %r8b, (%rdi,%rcx)",
+            "    incq %rcx",
+            "    testb %r8b, %r8b",
+            "    jne 1b",
+            "    leaq -1(%rdi,%rcx), %r8",   # 写位置 = rdi + rcx - 1 (覆盖源1结尾 0)
+            "    xorl %ecx, %ecx",
+            "2:  movzbl (%rdx,%rcx), %r9d",
+            "    movb %r9b, (%r8,%rcx)",
+            "    incq %rcx",
+            "    testb %r9b, %r9b",
+            "    jne 2b",
+            "    popq %r9",
+            "    popq %r8",
+            "    popq %rcx",
+            "    ret",
+            "flt_strcmp:",            # rdi=串1, rsi=串2 → rax = -1/0/1 (无符号字节字典序)
+            "    pushq %rcx",
+            "    pushq %r8",
+            "    pushq %r9",
+            "    xorl %ecx, %ecx",
+            "1:  movzbl (%rdi,%rcx), %r8d",
+            "    movzbl (%rsi,%rcx), %r9d",
+            "    cmpl %r9d, %r8d",
+            "    jne 2f",
+            "    testb %r8b, %r8b",
+            "    je 3f",
+            "    incq %rcx",
+            "    jmp 1b",
+            "2:  jb 4f",
+            "    movl $1, %eax",
+            "    jmp 5f",
+            "4:  movl $-1, %eax",
+            "    jmp 5f",
+            "3:  xorl %eax, %eax",
+            "5:  popq %r9",
+            "    popq %r8",
+            "    popq %rcx",
+            "    ret",
+            "flt_isqrt:",              # edi=x → eax = floor(sqrt(x)); x<0 → 0
+            "    pushq %rbx",
+            "    pushq %r8",
+            "    movl %edi, %ebx",
+            "    testl %ebx, %ebx",
+            "    jle 9f",
+            "    movl %ebx, %eax",
+            "    shrl $1, %eax",
+            "    orl $1, %eax",              # y0 = max(x/2, 1)
+            "    movl $6, %ecx",
+            "3:  movl %eax, %r8d",
+            "    movl %ebx, %edx",
+            "    xorl %edx, %edx",
+            "    divl %r8d",                 # eax = x/y
+            "    addl %r8d, %eax",           # y + q
+            "    shrl $1, %eax",             # 新 y
+            "    decl %ecx",
+            "    jne 3b",
+            "    movl %eax, %r8d",
+            "    imull %eax, %eax",
+            "    cmpl %ebx, %eax",
+            "    jbe 5f",
+            "    decl %r8d",
+            "    movl %r8d, %eax",
+            "5:  popq %r8",
+            "    popq %rbx",
+            "    ret",
+            "9:  xorl %eax, %eax",
+            "    popq %r8",
+            "    popq %rbx",
+            "    ret",
+            "flt_gcd:",                # edi=a, esi=b → eax = gcd(|a|,|b|)
+            "    pushq %rbx",
+            "    movl %edi, %ebx",
+            "    movl %esi, %ecx",
+            "    movl %edi, %eax",
+            "    negl %eax",
+            "    cmovs %eax, %ebx",
+            "    movl %esi, %eax",
+            "    negl %eax",
+            "    cmovs %eax, %ecx",
+            "1:  testl %ecx, %ecx",
+            "    je 3f",
+            "    movl %ebx, %eax",
+            "    xorl %edx, %edx",
+            "    divl %ecx",
+            "    movl %ecx, %ebx",
+            "    movl %edx, %ecx",
+            "    jmp 1b",
+            "3:  movl %ebx, %eax",
+            "    popq %rbx",
+            "    ret",
+            "flt_clamp:",              # edi=x, esi=lo, edx=hi → eax = clamp
+            "    movl %edi, %eax",
+            "    cmpl %esi, %eax",
+            "    cmovl %esi, %eax",
+            "    cmpl %edx, %eax",
+            "    cmovg %edx, %eax",
+            "    ret",
             "", ".section .rodata",
             ".Ltrap1: .ascii \"\\xe8\\xbf\\x90\\xe6\\x97\\xb6\\xe8\\xbf\\x9b\\xe9\\x99\\xb7\\xe4\\xba\\x95: \\xe7\\xb4\\xa2\\xe5\\xbc\\x95\\xe8\\xb6\\x8a\\xe7\\x95\\x8c\\n\"",
             ".Ltrap2: .ascii \"\\xe8\\xbf\\x90\\xe6\\x97\\xb6\\xe8\\xbf\\x9b\\xe9\\x99\\xb7\\xe4\\xba\\x95: \\xe9\\x99\\xa4\\xe9\\x9b\\xb6\\xe9\\x94\\x99\\xe8\\xaf\\xaf\\n\"",
@@ -282,10 +395,25 @@ class AsmGen:
         if isinstance(e, BinOp):
             if e.op in ("and", "or", "==", "!=", "<", ">", "<=", ">=", "in"):
                 return "bool"
+            if e.op == "+" and self._infer_type(e.left) == "str":
+                return "str"
             return "i32"
+        if isinstance(e, Ternary):
+            return self._infer_type(e.if_expr)
         if isinstance(e, Call):
-            return {"print": "void", "input": "i32", "len": "i32", "abs": "i32",
-                    "min": "i32", "max": "i32", "sum": "i32", "pow": "i32"}.get(e.name, "i32")
+            t = {"print": "void", "input": "i32", "len": "i32", "abs": "i32",
+                    "min": "i32", "max": "i32", "sum": "i32", "pow": "i32",
+                    "window": "void", "clear": "void", "fill_rect": "void",
+                    "fill_circle": "void", "draw_line": "void", "draw_char": "void",
+                    "poll_key": "i32", "window_closed": "i32", "present": "void",
+                    "getch": "i32", "clrscr": "void", "sleep": "void",
+                    "sqrt": "i32", "gcd": "i32", "clamp": "i32"}.get(e.name)
+            if t is not None:
+                return t
+            f = self.funcs.get(e.name)
+            if f is not None:
+                return f.ret or "void"
+            return "i32"
         return "i32"
 
     def _elem_type(self, e):
@@ -701,6 +829,17 @@ class AsmGen:
                 self._emit(f"je .L{lz}")
                 self._emit("movl $0, %eax")
                 self._emit_label(lz)
+        elif isinstance(e, Ternary):
+            self.gen_expr(e.cond)
+            self._emit("cmpl $0, %eax")
+            l_else = self._label()
+            l_end = self._label()
+            self._emit(f"je .L{l_else}")
+            self.gen_expr(e.if_expr)
+            self._emit(f"jmp .L{l_end}")
+            self._emit_label(l_else)
+            self.gen_expr(e.else_expr)
+            self._emit_label(l_end)
         elif isinstance(e, BinOp):
             self._gen_binop(e)
         elif isinstance(e, Call):
@@ -761,6 +900,49 @@ class AsmGen:
     # ---------- 二元 ----------
     def _gen_binop(self, e):
         op = e.op
+        lt = self._infer_type(e.left)
+        rt = self._infer_type(e.right)
+        if op == "+" and (lt == "str" or rt == "str"):
+            # v3.0: 运行时字符串拼接 → 256B 池槽
+            self.gen_expr(e.left)          # rax = 左串地址
+            self._pushq()
+            self.gen_expr(e.right)         # rax = 右串地址
+            self._popq("%rsi")             # rsi = 左串地址
+            slot = self._new_str_slot()
+            self._emit(f"leaq {slot}(%rip), %rdi")   # 目标缓冲
+            self._emit("movq %rsi, %rdx")  # rdx = 源1(左)
+            self._emit("movq %rax, %rsi")  # rsi = 源2(右)
+            self._emit("call flt_strcat")
+            self._emit("movq %rdi, %rax")  # 结果 = 目标地址
+            return
+        if op in ("==", "!=", "<", ">", "<=", ">=") and (lt == "str" or rt == "str"):
+            # v3.0: 字符串字典序比较 (flt_strcmp → rax = -1/0/1)
+            self.gen_expr(e.left)
+            self._pushq()
+            self.gen_expr(e.right)
+            self._popq("%rsi")             # rsi = 左串
+            self._emit("movq %rax, %rdi")  # rdi = 右串
+            self._emit("call flt_strcmp")
+            l_t = self._label()
+            if op == "==":
+                self._emit("cmpl $0, %eax")
+            elif op == "!=":
+                self._emit("cmpl $0, %eax")
+            elif op == "<":
+                self._emit("cmpl $-1, %eax")
+            elif op == ">":
+                self._emit("cmpl $1, %eax")
+            elif op == "<=":
+                self._emit("cmpl $1, %eax")
+            elif op == ">=":
+                self._emit("cmpl $-1, %eax")
+            self._emit("movl $1, %eax")
+            cc = {"==": "je", "!=": "jne", "<": "je", ">": "je",
+                  "<=": "jne", ">=": "jne"}[op]
+            self._emit(f"{cc} .L{l_t}")
+            self._emit("movl $0, %eax")
+            self._emit_label(l_t)
+            return
         if op in ("and", "or"):
             self.gen_expr(e.left)
             self._emit("cmpl $0, %eax")
@@ -964,6 +1146,33 @@ class AsmGen:
             self._emit("addq $16, %rsp")
             self._stack_off -= 16
             return
+        if c.name == "sqrt":
+            self.gen_expr(c.args[0])
+            self._emit("movl %eax, %edi")
+            self._emit("call flt_isqrt")
+            return
+        if c.name == "gcd":
+            self.gen_expr(c.args[0])     # rax = a
+            self._pushq()
+            self.gen_expr(c.args[1])     # rax = b
+            self._popq("%rdi")           # rdi = a
+            self._emit("movl %eax, %esi")  # rsi = b
+            self._emit("call flt_gcd")
+            return
+        if c.name == "clamp":
+            self.gen_expr(c.args[0])     # rax = x
+            self._pushq()
+            self.gen_expr(c.args[1])     # rax = lo
+            self._pushq()
+            self.gen_expr(c.args[2])     # rax = hi
+            self._popq("%rdx")           # rdx = lo
+            self._popq("%rdi")           # rdi = x
+            self._emit("movl %eax, %esi")  # rsi = hi → 交换: rdx=lo, rsi=hi
+            self._emit("movl %edx, %ecx")  # 暂存 lo
+            self._emit("movl %esi, %edx")  # rdx = hi
+            self._emit("movl %ecx, %esi")  # rsi = lo
+            self._emit("call flt_clamp")
+            return
         if c.name == "len":
             arg = c.args[0]
             if self._infer_type(arg) == "str":
@@ -1042,15 +1251,23 @@ class AsmGen:
             self._emit(f"jmp .L{l_scan}")
             self._emit_label(l_done)
             return
-        # 用户函数: 参数从右向左压栈; 对齐垫在参数之下(参数位置 = rbp+16+8i)
-        d = len(c.args)
+        # 用户函数 (v3.0: 缺失参数自动补默认值): 参数从右向左压栈; 对齐垫在参数之下
+        func = self.funcs.get(c.name)
+        defaults = func.defaults if func is not None else []
+        args = list(c.args)
+        while len(args) < len(self.funcs[c.name].params):
+            dv = defaults[len(args)]
+            if dv is None:
+                raise AsmError(f"asm: 函数 {c.name} 缺参数")
+            args.append(dv)
+        d = len(args)
         base = self._stack_off
         pad = 0
         if (base + 8 * d) % 16 != 0:
             self._emit("subq $8, %rsp")
             self._stack_off += 8
             pad = 8
-        for a in reversed(c.args):
+        for a in reversed(args):
             self.gen_expr(a)
             self._pushq()
         self._emit(f"call {c.name}")
@@ -1105,6 +1322,12 @@ class AsmGen:
     def _is_str_expr(self, e):
         if isinstance(e, StrLit):
             return True
+        if isinstance(e, Ternary):
+            return self._infer_type(e) == "str"
+        if isinstance(e, Call):
+            return self._infer_type(e) == "str"
+        if isinstance(e, BinOp):
+            return self._infer_type(e) == "str"
         if isinstance(e, Var):
             return self.var_types.get(e.name) == "str" or self.global_types.get(e.name) == "str"
         return False

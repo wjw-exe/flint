@@ -27,6 +27,8 @@ CASES = [
     ("pythonic.fl", ["112"]),
     ("v21_ext.fl", ["1024", "while ok", "for ok"]),
     ("echo.fl", []),  # 读取 stdin(EOF 即正常结束)
+    # v3.0: 条件表达式 / 默认参数 / 运行时字符串拼接与比较 / sqrt / gcd / clamp
+    ("v30_features.fl", ["Hello, World!", "Hi, Doubao!", "abcFlint", "10", "42", "12", "100", "50"]),
 ]
 
 

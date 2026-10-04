@@ -1,0 +1,29 @@
+# v3.0 新特性验证: 条件表达式 / 默认参数 / 运行时字符串拼接与比较 / sqrt / gcd / clamp
+def greet(name: str, greeting: str = "Hello") -> str:
+    return greeting + ", " + name + "!"
+
+def scale(x: i32, lo: i32 = 0, hi: i32 = 100) -> i32:
+    return clamp(x, lo, hi)
+
+def main():
+    a: str = "Flint"
+    b: str = "flint"
+    print(greet("World"))            # Hello, World!
+    print(greet("Doubao", "Hi"))     # Hi, Doubao!
+    print(a == b)                    # 0
+    print(a != b)                    # 1
+    print(a < b)                     # 1 (F < f, 字典序)
+    print(a >= b)                    # 0
+    print("abc" + a)                 # abcFlint
+    n: i32 = 10
+    x: i32 = n if n > 5 else -1      # 10
+    y: i32 = n if n < 5 else 42      # 42
+    print(x)
+    print(y)
+    print(sqrt(100))                 # 10
+    print(sqrt(2))                   # 1
+    print(gcd(48, 36))               # 12
+    print(scale(-5))                 # 0
+    print(scale(500))                # 100
+    print(scale(50, 20, 80))         # 50
+    print(clamp(0, 0, 0))            # 0 (收尾: 让 main 退出码为 0)

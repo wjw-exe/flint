@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-codegen.py — AST → Flint-ASM 汇编文本 (Flint v2.1)。
+codegen.py — AST → Flint-ASM 汇编文本 (Flint v3.0)。
 
 调用约定(与 flint-lang 一致):
   * 参数从右向左压栈, 第 i 个参数位于 FP+8+4*i (FP = r14, SP = r15)
@@ -25,7 +25,7 @@ v2.1 新增:
 from parser import (Program, FuncDef, Decl, Assign, IndexAssign, AugAssign,
                     Return, If, While, For, Break, Continue, Pass, ExprStmt,
                     BinOp, Unary, Call, Var, Index, IntLit, BoolLit, StrLit,
-                    ListLit)
+                    ListLit, Ternary)
 
 
 def is_list(t):
@@ -59,6 +59,7 @@ class CodeGen:
         self.for_list_idx = {}       # id(For) → 遍历索引槽偏移
         self.loop_stack = []         # [(break_label, continue_label)]
         self.ret_label = None
+        self.str_slot_n = 0            # v3.0: 运行时字符串拼接的临时池槽计数
 
     # ---------- 工具 ----------
     def _label(self):
@@ -79,6 +80,13 @@ class CodeGen:
         lab = f"__s{self.str_n}"
         data = val.encode("utf-8")
         self.data_lines.append(f"{lab}: DB {', '.join(str(b) for b in data)}, 0")
+        return lab
+
+    def _new_str_slot(self):
+        """v3.0: 为运行时字符串拼接分配 256 字节临时池槽(拼接结果存活至语句结束)。"""
+        self.str_slot_n += 1
+        lab = f"__sb{self.str_slot_n}"
+        self.data_lines.append(f"{lab}: DB {', '.join(['0'] * 256)}")
         return lab
 
     # ---------- 顶层 ----------
@@ -270,14 +278,25 @@ class CodeGen:
         if isinstance(e, BinOp):
             if e.op in ("and", "or", "==", "!=", "<", ">", "<=", ">=", "in"):
                 return "bool"
+            if e.op == "+" and self._infer_type(e.left) == "str":
+                return "str"
             return "i32"
+        if isinstance(e, Ternary):
+            return self._infer_type(e.if_expr)   # 两分支同类型(typecheck 已保证)
         if isinstance(e, Call):
-            return {"print": "void", "input": "i32", "getch": "i32", "clrscr": "void",
+            t = {"print": "void", "input": "i32", "getch": "i32", "clrscr": "void",
                     "sleep": "void", "len": "i32", "abs": "i32",
                     "min": "i32", "max": "i32", "sum": "i32", "pow": "i32",
                     "window": "void", "clear": "void", "fill_rect": "void",
                     "fill_circle": "void", "draw_line": "void", "draw_char": "void",
-                    "poll_key": "i32", "window_closed": "i32", "present": "void"}.get(e.name, "i32")
+                    "poll_key": "i32", "window_closed": "i32", "present": "void",
+                    "sqrt": "i32", "gcd": "i32", "clamp": "i32"}.get(e.name)
+            if t is not None:
+                return t
+            f = self.funcs.get(e.name)      # v3.0: 用户函数调用的返回类型
+            if f is not None:
+                return f.ret or "void"
+            return "i32"
         return "i32"
 
     def _elem_type(self, e):
@@ -654,6 +673,17 @@ class CodeGen:
                 self._emit(f"JE {lz}")
                 self._emit("MOV r0, 0")
                 self._emit(f"{lz}:")
+        elif isinstance(e, Ternary):
+            self.gen_expr(e.cond)
+            self._emit("CMPI r0, 0")
+            l_else = self._label()
+            l_end = self._label()
+            self._emit(f"JE {l_else}")
+            self.gen_expr(e.if_expr)
+            self._emit(f"JMP {l_end}")
+            self._emit(f"{l_else}:")
+            self.gen_expr(e.else_expr)
+            self._emit(f"{l_end}:")
         elif isinstance(e, BinOp):
             self._gen_binop(e)
         elif isinstance(e, Call):
@@ -700,6 +730,43 @@ class CodeGen:
 
     def _gen_binop(self, e):
         op = e.op
+        lt = self._t(e.left)
+        rt = self._t(e.right)
+        if op == "+" and (lt == "str" or rt == "str"):
+            # v3.0: 运行时字符串拼接 → 写入编译期分配的 256B 临时池槽
+            self.gen_expr(e.left)          # r0 = 左串地址
+            self._emit("PUSH r0")
+            self.gen_expr(e.right)         # r0 = 右串地址
+            self._emit("POP r1")           # r1 = 左串地址
+            slot = self._new_str_slot()
+            self._emit(f"LDA r2, {slot}")
+            self._emit("STRCAT r2, r1, r0")
+            self._emit("MOV r0, r2")
+            return
+        if op in ("==", "!=", "<", ">", "<=", ">=") and (lt == "str" or rt == "str"):
+            # v3.0: 字符串字典序比较 (STRCMP 返回 -1/0/1)
+            self.gen_expr(e.left)
+            self._emit("PUSH r0")
+            self.gen_expr(e.right)
+            self._emit("POP r1")
+            self._emit("STRCMP r2, r1, r0")
+            self._emit("MOV r0, 1")
+            l_t = self._label()
+            if op == "==":
+                self._emit("CMPI r2, 0"); self._emit(f"JE {l_t}")
+            elif op == "!=":
+                self._emit("CMPI r2, 0"); self._emit(f"JNE {l_t}")
+            elif op == "<":
+                self._emit("CMPI r2, -1"); self._emit(f"JE {l_t}")
+            elif op == ">":
+                self._emit("CMPI r2, 1"); self._emit(f"JE {l_t}")
+            elif op == "<=":
+                self._emit("CMPI r2, 1"); self._emit(f"JNE {l_t}")    # r2 != 1 → true
+            elif op == ">=":
+                self._emit("CMPI r2, -1"); self._emit(f"JNE {l_t}")   # r2 != -1 → true
+            self._emit("MOV r0, 0")
+            self._emit(f"{l_t}:")
+            return
         if op in ("and", "or"):
             # 短路求值
             self.gen_expr(e.left)
@@ -909,6 +976,34 @@ class CodeGen:
             self._emit(f"{ldone}:")
             self._emit("MOV r0, r3")
             return
+        if c.name == "sqrt":
+            self.gen_expr(c.args[0])
+            self._emit("TRAP 14")       # 整数平方根(向下取整; 负数 → 0)
+            return
+        if c.name == "gcd":
+            self.gen_expr(c.args[0])    # r0 = a
+            self._emit("PUSH r0")
+            self.gen_expr(c.args[1])    # r0 = b
+            self._emit("POP r1")        # r1 = a
+            self._emit("MOV r2, r0")    # r2 = b
+            self._emit("MOV r0, r1")    # r0 = a
+            self._emit("MOV r1, r2")    # r1 = b
+            self._emit("TRAP 15")
+            return
+        if c.name == "clamp":
+            self.gen_expr(c.args[0])    # r0 = x
+            self._emit("PUSH r0")
+            self.gen_expr(c.args[1])    # r0 = lo
+            self._emit("PUSH r0")
+            self.gen_expr(c.args[2])    # r0 = hi
+            self._emit("POP r2")        # r2 = lo
+            self._emit("POP r1")        # r1 = x
+            self._emit("MOV r3, r0")    # r3 = hi
+            self._emit("MOV r0, r1")    # r0 = x
+            self._emit("MOV r1, r2")    # r1 = lo
+            self._emit("MOV r2, r3")    # r2 = hi
+            self._emit("TRAP 16")
+            return
         if c.name == "pow":
             # pow(a, b): 循环乘(32 位回绕); b<0 → 1(与 x86 幂语义一致)
             self.gen_expr(c.args[0])
@@ -928,13 +1023,21 @@ class CodeGen:
             self._emit(f"JMP {lscan}")
             self._emit(f"{ldone}:")
             return
-        # 用户函数
-        for a in reversed(c.args):
+        # 用户函数 (v3.0: 缺失参数自动补默认值, 仍从右向左压栈)
+        func = self.funcs.get(c.name)
+        defaults = func.defaults if func is not None else []
+        args = list(c.args)
+        while len(args) < len(self.funcs[c.name].params):
+            dv = defaults[len(args)]
+            if dv is None:
+                raise RuntimeError(f"codegen: 函数 {c.name} 缺参数")
+            args.append(dv)
+        for a in reversed(args):
             self.gen_expr(a)
             self._emit("PUSH r0")
         self._emit(f"CALL {c.name}")
-        if c.args:
-            self._emit(f"MOV r2, {4 * len(c.args)}")
+        if args:
+            self._emit(f"MOV r2, {4 * len(args)}")
             self._emit("ADD r15, r15, r2")
 
     def _gen_print(self, args):
@@ -964,6 +1067,12 @@ class CodeGen:
     def _is_str_expr(self, e):
         if isinstance(e, StrLit):
             return True
+        if isinstance(e, Ternary):
+            return self._infer_type(e) == "str"
+        if isinstance(e, Call):
+            return self._infer_type(e) == "str"   # 返回 str 的用户函数/内置调用
+        if isinstance(e, BinOp):
+            return self._infer_type(e) == "str"   # v3.0: 字符串拼接表达式
         if isinstance(e, Var):
             return self.var_types.get(e.name) == "str" or self.global_types.get(e.name) == "str"
         return False
@@ -972,5 +1081,5 @@ class CodeGen:
         if isinstance(e, StrLit):
             lab = self._new_str(e.val)
             self._emit(f"LDA r0, {lab}")
-        else:  # Var(str)
+        else:  # Var(str)/Ternary/拼接表达式: 直接求值得到字符串地址
             self.gen_expr(e)

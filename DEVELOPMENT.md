@@ -1,4 +1,4 @@
-# Flint v2.2 开发文档
+﻿# Flint v2.2 开发文档
 
 > 燧石语言（Flint）——Python 风格语法、静态类型、编译型。VM 后端自研指令集 + 虚拟机；
 > 原生后端直接生成 x86-64 汇编（不经 C、不经任何中间语言）。
@@ -286,7 +286,41 @@ VM 后端纵向：`fib(15)` 62ms→1.0ms、`sum 1e6` 18.6s→2.2ms、列表遍�
 | 无 GC | 栈帧自动回收；列表编译期定长、无堆分配；总内存受 VM 64KB 限制 |
 | i32 32 位回绕 | 超出 2³¹ 回绕（Python 无界大整数会得到精确值）——性能换确定性 |
 | 静态定长列表 | `list[i32]` 由字面量定长、`list[i32; N]` 显式定长（零初始化） |
-| 字符串受限 | 只支持字面量拼接（编译期折叠）；`s[i]` 返回字符码 |
+| 字符串 | 字面量拼接编译期折叠；**v3.0 起运行时拼接/比较**（`STRCAT`/`STRCMP`，每拼接一个 256B 池槽，过长越界报错）；`s[i]` 返回字符码 |
 | 无字典/类/对象/闭包 | `for-else`、`try` 等未实现；全局变量只读（无 `global` 关键字） |
 | 原生后端需 gcc | Windows 默认无 gcc：VM 模式零依赖可用；`--native` 报清晰提示（不会崩溃） |
 | flt_trap 为 Linux syscall | 原生产物 trap 路径目前面向 Linux/macOS（见 §8.4） |
+
+---
+
+## 18. v3.0 大版本更新记录（2026-10-04，语言本体，不动游戏引擎）
+
+### 18.1 新语法
+
+1. **条件表达式**  if c else b（parser.py parse_expr 顶层，右结合可嵌套；typecheck 校验条件为 bool、两分支类型一致；codegen/asm.py 分支跳转生成）。
+2. **默认参数值** def f(x: i32, y: i32 = 10)：
+   - parser：参数列表支持 = 字面量，FuncDef 新增 defaults（与 params 对齐，无默认处 None）；
+   - typecheck：默认值必须字面量且类型匹配；**有默认值参数之后不能再有无默认值参数**（与 Python 一致）；调用允许缺参（下限=必需参数数）；
+   - codegen/asm.py：调用处从右向左压栈时**自动补默认值**。
+
+### 18.2 运行时字符串拼接与比较（新 ISA 指令）
+
+- STRCAT 0x25：STRCAT rd, rs1, rs2 —— 把 rs1、rs2 两个 0 结尾字符串**无缝拼接**到 rd 指向的缓冲（第二串覆盖第一串结尾 0；VM 实现于 vm.py，原生后端对应 lt_strcat 助手）。
+- STRCMP 0x26：STRCMP rd, rs1, rs2 —— d = -1/0/1 无符号字节字典序（VM 实现；原生 lt_strcmp）。
+- codegen _gen_binop：str + str → 分配 256B 池槽（__sbN，编译期数据段）→ STRCAT；比较 == != < > <= >= → STRCMP + 布尔映射。
+- **已知边界**：每个拼接表达式独立占 256B 池槽（编译期分配）；拼接结果超 256B 会越界（TRAP 1）；嵌套/长串注意内存 64KB 总量。
+
+### 18.3 新内置（TRAP 14-16，双后端同步）
+
+| 内置 | 签名 | 语义 | VM | 原生 |
+|---|---|---|---|---|
+| sqrt | sqrt(x: i32) -> i32 | 整数平方根向下取整；负数 → 0 | TRAP 14 (math.isqrt) | lt_isqrt（6 次牛顿迭代+校正） |
+| gcd | gcd(a: i32, b: i32) -> i32 | 最大公约数（取绝对值） | TRAP 15 (math.gcd) | lt_gcd（辗转相除） |
+| clamp | clamp(x, lo, hi) -> i32 | 夹取到 [lo, hi] | TRAP 16 | lt_clamp（cmov） |
+
+### 18.4 版本与交付
+
+- lint.py __version__ = "3.0.0"；lint_ide.py __version__ = "3.0.0"（IDE 外壳版本同步，引擎代码未动）。
+- 新增 examples/v30_features.fl（全部新特性演示）；smoke_tests.py 增至 **11 个用例**（10 旧 + v30）。
+- 双后端一致性：codegen.py（VM 链）与 asm.py（x86 链）同步实现；回归 = smoke_tests.py 11/11 + lint-lang/tests/run_tests.py 17/17 + gfx 模式 offscreen 5 帧 exit 0。
+- 已知边界：asm.py 的原生 lt_* 助手为 x86-64 Linux/macOS syscall 环境（同 §8.4）；Windows 无 gcc 时走 VM 模式，功能等价。

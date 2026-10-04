@@ -64,6 +64,8 @@ OPCODES = {
     "OUTI": 0x22,  # OUTI rs1              输出十进制有符号整数
     "CMPI": 0x23,  # CMPI rs1, imm16       与 16 位立即数比较, 仅更新标志位
     "TRAP": 0x24,  # TRAP imm16            触发运行时陷阱(越界等), 停机并报错
+    "STRCAT": 0x25, # STRCAT rd, rs1, rs2   拼接两个 0 结尾字符串到 rd 缓冲 (v3.0)
+    "STRCMP": 0x26, # STRCMP rd, rs1, rs2   rd = -1/0/1 字典序比较 (v3.0)
 }
 
 OP_TO_NAME = {v: k for k, v in OPCODES.items()}
@@ -72,7 +74,8 @@ OP_TO_NAME = {v: k for k, v in OPCODES.items()}
 J_TYPE_OPS = {"MOVI", "LDA"}
 
 # R 型指令的操作数字段布局
-R_TYPE_OPS = {"ADD", "SUB", "MUL", "DIV", "MOD", "AND", "OR", "XOR", "SHL", "SHR"}
+R_TYPE_OPS = {"ADD", "SUB", "MUL", "DIV", "MOD", "AND", "OR", "XOR", "SHL", "SHR",
+               "STRCAT", "STRCMP"}
 
 
 # ---------- 数值工具 ----------
