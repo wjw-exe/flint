@@ -16,6 +16,7 @@ v3.1 新增: 字符字面量 'a' (→ i32 字符码) / str(i32) 数字转字符�
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -43,7 +44,7 @@ from parser import Parser, ParseError
 from typecheck import TypeChecker, TypeCheckError
 from codegen import CodeGen
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 
 
 def parse_program(src: str):
@@ -106,6 +107,11 @@ def cmd_run(args):
             if os.path.exists(exe):
                 os.unlink(exe)
     asm_text = _compile_or_die(src)
+    # v3.2.1 自动路由: 程序用了引擎内置就自动切对应模式, 不必手动区分 run/gfx/ui
+    if re.search(r"TRAP (29|3\d|4[01])\b", asm_text):
+        return cmd_ui(args)            # UI 库程序 → ui 模式(弹窗口)
+    if re.search(r"TRAP (2[0-8])\b", asm_text):
+        return cmd_gfx(args)           # 图形程序 → gfx 模式(弹窗口)
     try:
         image, _symbols = assemble(asm_text)
     except AsmError as e:
