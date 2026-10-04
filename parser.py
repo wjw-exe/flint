@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-parser.py — Flint v3.0 递归下降解析器。
+parser.py — Flint v3.1 递归下降解析器。
 
 把 token 流解析为抽象语法树(AST)。语法与 Python 高度一致:
   def 函数定义 / if-elif-else / while / for x in range(...) / for x in xs

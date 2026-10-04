@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-asm.py — Flint 的 x86-64 汇编后端(直接产出 AT&T 汇编, 不再经过 C)。
+asm.py — Flint v3.1 的 x86-64 汇编后端(直接产出 AT&T 汇编, 不再经过 C)。
 
 流水线: AST → 静态类型检查 → x86-64 汇编文本 → gcc -no-pie -O2 汇编链接 → 可执行文件。
 

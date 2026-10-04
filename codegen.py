@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-codegen.py — AST → Flint-ASM 汇编文本 (Flint v3.0)。
+codegen.py — AST → Flint-ASM 汇编文本 (Flint v3.1)。
 
 调用约定(与 flint-lang 一致):
   * 参数从右向左压栈, 第 i 个参数位于 FP+8+4*i (FP = r14, SP = r15)
