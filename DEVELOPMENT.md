@@ -1,4 +1,4 @@
-﻿# Flint v3.1 开发文档
+﻿# Flint v3.2.1 开发文档
 
 > 燧石语言（Flint）——Python 风格语法、静态类型、编译型。VM 后端自研指令集 + 虚拟机；
 > 原生后端直接生成 x86-64 汇编（不经 C、不经任何中间语言）。
@@ -400,4 +400,5 @@ set_text)在 VM 侧读 0 结尾 UTF-8 解码。
 
 - 打包：`cd 工作目录; $env:PYTHONPATH="$PWD\.env\site-packages"; py -3 -m PyInstaller -y --onefile --name flint --paths flint-lang flint.py`（IDE 同理 --name flint-ide flint_ide.py）；打完 `xcopy /e /i /y /q examples dist\examples`。
 - 发布：`git add -A; git commit -m "vX.Y.Z: ..."; git push origin main; git tag -a vX.Y.Z -m "..."; git push origin vX.Y.Z`（GCM 凭据直接 push）。
-- 回归：`py -3 smoke_tests.py`（12/12）+ `py -3 flint-lang	estsun_tests.py`（17/17）+ gfx/ui offscreen 帧测试。
+- 回归：`py -3 smoke_tests.py`（12/12）+ `py -3 flint-lang	ests
+un_tests.py`（17/17）+ gfx/ui offscreen 帧测试。

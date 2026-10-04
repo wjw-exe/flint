@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-flint_ide.py — 燧石语言 Flint v2 专属 IDE (PyQt6)
+flint_ide.py — 燧石语言 Flint v3.2.1 专属 IDE (PyQt6)
 
 功能
 ----
