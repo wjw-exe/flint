@@ -56,7 +56,7 @@ except ImportError:
     sys.stderr.write("缺少依赖: 请把 flint-v2 与 flint-lang 放在同一级目录下\n")
     sys.exit(1)
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 
 MAX_STEPS = 20_000_000          # 运行步数上限(防死循环, 可停止)
 

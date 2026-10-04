@@ -294,7 +294,12 @@ class CodeGen:
                     "fill_circle": "void", "draw_line": "void", "draw_char": "void",
                     "poll_key": "i32", "window_closed": "i32", "present": "void",
                     "sqrt": "i32", "gcd": "i32", "clamp": "i32",
-                    "str": "str"}.get(e.name)
+                    "str": "str",
+                    "ui_window": "i32", "ui_button": "i32", "ui_label": "i32",
+                    "ui_slider": "i32", "ui_progress": "i32", "ui_checkbox": "i32",
+                    "ui_clicked": "bool", "ui_value": "i32", "ui_checked": "bool",
+                    "ui_set_text": "i32", "ui_set_value": "i32",
+                    "ui_present": "i32", "ui_closed": "bool"}.get(e.name)
             if t is not None:
                 return t
             f = self.funcs.get(e.name)      # v3.0: 用户函数调用的返回类型
@@ -1034,6 +1039,25 @@ class CodeGen:
             self._emit("SUB r2, r2, r3")
             self._emit(f"JMP {lscan}")
             self._emit(f"{ldone}:")
+            return
+        # v3.1 纯 UI 库: ui_* → TRAP 29-41 (参数按序进 r0..r5, str 参数取地址)
+        UI_TRAPS = {
+            "ui_window": 29, "ui_button": 30, "ui_label": 31, "ui_slider": 32,
+            "ui_progress": 33, "ui_checkbox": 34, "ui_clicked": 35,
+            "ui_value": 36, "ui_checked": 37, "ui_set_text": 38,
+            "ui_set_value": 39, "ui_present": 40, "ui_closed": 41,
+        }
+        UI_STR_POS = {30: 4, 31: 2, 34: 2, 38: 1}   # TRAP → 第几个参数是 str
+        if c.name in UI_TRAPS:
+            trap = UI_TRAPS[c.name]
+            sp = UI_STR_POS.get(trap)
+            for i, a in enumerate(c.args):
+                if sp is not None and i == sp:
+                    self._gen_str_addr(a)
+                else:
+                    self.gen_expr(a)
+                self._emit(f"MOV r{i}, r0")
+            self._emit(f"TRAP {trap}")
             return
         # 用户函数 (v3.0: 缺失参数自动补默认值, 仍从右向左压栈)
         func = self.funcs.get(c.name)

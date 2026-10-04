@@ -1,4 +1,4 @@
-# Flint v3.1 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
+# Flint v3.2.0 — Python 风格语法 · 静态类型 · 编译型语言 · 原生 x86-64 汇编后端
 
 > 上一版 Flint 是类 C 大括号语法。v2 重写前端，**语法接近 Python**（缩进、`def`、`if`/`elif`/`else`、`while`、`for … in range(…)`），
 > 但它是**编译型**语言：源码 → 词法/语法/类型检查 → 生成汇编 → 机器码。
@@ -249,6 +249,14 @@ AT&T 汇编 (可读, 可人工检查)
 - 列表是**静态定长**：`list[i32]` 由字面量定长, `list[i32; N]` 显式定长（零初始化）；总内存受 VM 64KB 限制
 - 字符串：字面量拼接编译期折叠（v2.1）；**运行时拼接/比较**（v3.0, `STRCAT`/`STRCMP` 指令, 每个拼接表达式分配一个 256B 池槽, 拼接结果过长会越界报错）；`s[i]` 返回字符码 i32
 - **字符字面量** `'a'` → i32 字符码（v3.1, 与 `s[i]` 语义一致）；**`str(i32)`** 数字转字符串（v3.1, 十进制带负号, 配合拼接做格式化输出）
+- **纯 UI 库**（v3.2）：`ui_window/ui_button/ui_label/ui_slider/ui_progress/ui_checkbox` 创建组件,
+  `ui_clicked(边沿)/ui_value/ui_checked` 轮询状态, `ui_set_text/ui_set_value` 更新组件,
+  `ui_present()/ui_closed()` 刷新与退出。**UI 只负责渲染与输入捕获, 一切计算由后端完成**——
+  无回调、无对象、组件以整数 ID 引用；仅支持 VM/ui 模式（原生后端明确报错）
+- **纯 UI 库**（v3.2）：`ui_window/ui_button/ui_label/ui_slider/ui_progress/ui_checkbox` 创建组件,
+  `ui_clicked(边沿)/ui_value/ui_checked` 轮询状态, `ui_set_text/ui_set_value` 更新组件,
+  `ui_present()/ui_closed()` 刷新与退出。**UI 只负责渲染与输入捕获, 一切计算由后端完成**——
+  无回调、无对象、组件以整数 ID 引用；仅支持 VM/ui 模式（原生后端明确报错）
 - 默认参数值必须是字面量（v3.0）；有默认值的参数之后不能再有无默认值参数（与 Python 规则一致）
 - 无字典/类/对象/闭包/GC；`for … else`、`try` 等未实现
 - 全局变量是只读的（无 `global` 关键字, 函数内同名赋值会创建局部变量, 与 Python 一致）
@@ -262,13 +270,14 @@ v2 编译到与 v1 完全相同的 Flint-ASM/虚拟机，而 Flint-ASM 已通过
 
 ```
 flint-windows/             (即本仓库)
-├── flint.py               CLI: run / asm / native (+ --native)
+├── flint.py               CLI: run / asm / native / gfx / ui
 ├── flint_ide.py           专属 IDE (PyQt6)
 ├── lexer.py parser.py typecheck.py codegen.py   前端: 缩进词法 → AST → 静态类型 → VM 汇编
 ├── asm.py                 x86-64 汇编后端: AST → AT&T 汇编 → gcc 汇编链接 → 可执行
-├── smoke_tests.py         开箱自检: 10 个示例 VM 模式全跑 + 断言
+├── flint_ui.py            纯 UI 库引擎 (PyQt6): 组件渲染/输入捕获, 计算全交给后端
+├── smoke_tests.py         开箱自检: 12 个示例 VM 模式全跑 + 断言
 ├── flint-lang/            底层库: 32 位 ISA / 汇编器 / 虚拟机(17 项测试)
-├── examples/              hello / fib / loops / prime / echo / lists / break_continue / bubble_sort / pythonic / v21_ext
+├── examples/              hello / fib / loops / prime / echo / lists / break_continue / bubble_sort / pythonic / v21_ext / ui_calc(计算器)
 ├── build.bat              Windows 一键构建 flint.exe + flint-ide.exe(免 Python)
 └── run.bat                启动图形 IDE
 
@@ -285,3 +294,43 @@ pip install PyQt6
 python3 flint_ide.py examples/lists.fl
 ```
 详见 [README-IDE.md](README-IDE.md)。
+
+## 纯 UI 库 (v3.2)
+
+UI 库与后端彻底分离：**引擎只画组件、收输入；业务逻辑全部写在后端(.fl 代码)里**。
+组件以整数 ID 引用，事件用轮询读取（`ui_clicked` 边沿触发：只在被点击的那一帧返回 1 并清零）。
+
+```bash
+python3 flint.py ui examples/ui_calc.fl     # 打开计算器(真机)
+python3 flint.py ui x.fl --frames 3         # 离屏跑 3 帧(CI/测试)
+```
+
+```python
+def main() -> i32:
+    ui_window(340, 290)
+    disp = ui_label(15, 15, "0")
+    btn = ui_button(15, 195, 70, 34, "+")     # → i32 ID
+    while not ui_closed():
+        ui_present()
+        if ui_clicked(btn):                   # 轮询, 无回调
+            ui_set_text(disp, "1")
+    return 0
+```
+
+| 内置 | 作用 | 返回 |
+| --- | --- | --- |
+| `ui_window(w, h)` | 设置窗口尺寸 | 0 |
+| `ui_button(x, y, w, h, label)` | 按钮 | ID |
+| `ui_label(x, y, text)` | 文本 | ID |
+| `ui_slider(x, y, w, lo, hi, val)` | 滑块 | ID |
+| `ui_progress(x, y, w, val)` | 进度条(0-100) | ID |
+| `ui_checkbox(x, y, label, checked)` | 复选框 | ID |
+| `ui_clicked(id)` | 点击事件(边沿, 读后清零) | bool |
+| `ui_value(id)` | 滑块/进度条当前值 | i32 |
+| `ui_checked(id)` | 复选框状态 | bool |
+| `ui_set_text(id, text)` / `ui_set_value(id, v)` | 更新组件 | 0 |
+| `ui_present()` | 刷新画面 | 0 |
+| `ui_closed()` | 窗口是否已关闭 | bool |
+
+> 架构与 2D 引擎一致：VM 线程跑程序 + Qt 主线程渲染 + 锁保护队列。
+> 原生后端(asm.py)遇到 `ui_*` 明确报错：UI 仅支持 `ui` 模式(VM)。

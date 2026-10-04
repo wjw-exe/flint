@@ -481,6 +481,26 @@ class TypeChecker:
             if self.expr(c.args[0]) != "i32":
                 raise TypeCheckError(c.line, f"str 的参数必须是 i32, 得到 {type_str(self.expr(c.args[0]))}")
             return "str"
+        # v3.1 纯 UI 库: 组件创建/状态读写/事件轮询 (全部返回 i32)
+        UI_SIG = {
+            "ui_window": (2, ()), "ui_button": (5, (4,)), "ui_label": (3, (2,)),
+            "ui_slider": (6, ()), "ui_progress": (4, ()), "ui_checkbox": (4, (2,)),
+            "ui_clicked": (1, ()), "ui_value": (1, ()), "ui_checked": (1, ()),
+            "ui_set_text": (2, (1,)), "ui_set_value": (2, ()),
+            "ui_present": (0, ()), "ui_closed": (0, ()),
+        }
+        if c.name in UI_SIG:
+            n, str_pos = UI_SIG[c.name]
+            if len(c.args) != n:
+                raise TypeCheckError(c.line, f"{c.name} 需要 {n} 个参数: {c.name}(...)")
+            for i, a in enumerate(c.args):
+                t = self.expr(a)
+                want = "str" if i in str_pos else "i32"
+                if t != want:
+                    raise TypeCheckError(c.line, f"{c.name} 的第 {i + 1} 个参数必须是 {want}, 得到 {type_str(t)}")
+            if c.name in ("ui_clicked", "ui_checked", "ui_closed"):
+                return "bool"          # 语义是布尔(底层 0/1), 可直接用于 if/while/not
+            return "i32"
         if c.name not in self.funcs:
             raise TypeCheckError(c.line, f"函数 {c.name} 未定义")
         f = self.funcs[c.name]

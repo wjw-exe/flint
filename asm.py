@@ -447,7 +447,12 @@ class AsmGen:
                     "poll_key": "i32", "window_closed": "i32", "present": "void",
                     "getch": "i32", "clrscr": "void", "sleep": "void",
                     "sqrt": "i32", "gcd": "i32", "clamp": "i32",
-                    "str": "str"}.get(e.name)
+                    "str": "str",
+                    "ui_window": "i32", "ui_button": "i32", "ui_label": "i32",
+                    "ui_slider": "i32", "ui_progress": "i32", "ui_checkbox": "i32",
+                    "ui_clicked": "bool", "ui_value": "i32", "ui_checked": "bool",
+                    "ui_set_text": "i32", "ui_set_value": "i32",
+                    "ui_present": "i32", "ui_closed": "bool"}.get(e.name)
             if t is not None:
                 return t
             f = self.funcs.get(e.name)
@@ -1194,6 +1199,9 @@ class AsmGen:
             self._popq("%rdi")            # rdi = 数字
             self._emit("call flt_itoa")
             return
+        # v3.1 纯 UI 库: 原生后端无 Qt 环境, 明确报错(请用 ui 模式/VM 运行)
+        if c.name.startswith("ui_"):
+            raise AsmError(f"UI 内置 {c.name} 仅支持 ui 模式(VM), 原生后端未实现 UI 组件")
         if c.name == "sqrt":
             self.gen_expr(c.args[0])
             self._emit("movl %eax, %edi")

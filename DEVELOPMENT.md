@@ -327,6 +327,31 @@ d = -1/0/1 无符号字节字典序（VM 实现；原生 lt_strcmp）。
 - 已知边界：asm.py 的原生 lt_* 助手为 x86-64 Linux/macOS syscall 环境（同 §8.4）；Windows 无 gcc 时走 VM 模式，功能等价。
 
 
+## 20. v3.2: 纯 UI 库
+
+**架构**: UI 与后端彻底分离。lint_ui.py(UiEngine) 只负责组件创建/渲染/输入捕获——
+按钮点击、滑块拖动、复选框切换写进 states 字典；Flint 程序(VM 线程)通过 TRAP 29-41
+轮询状态并下发更新命令。无回调、无对象：组件以整数 ID 引用。
+
+**线程模型**: VM 线程跑程序(TRAP 29-41 只操作引擎的锁保护队列/状态), Qt 主线程
+(QTimer 16ms) 消费命令队列创建/更新 QWidget。文本参数在 VM 侧 _cstr() 解码后传引擎,
+引擎不碰 VM 内存(防内存跨界)。
+
+**TRAP 29-41 映射**: 29 ui_window 30 ui_button 31 ui_label 32 ui_slider 33 ui_progress
+34 ui_checkbox 35 ui_clicked 36 ui_value 37 ui_checked 38 ui_set_text 39 ui_set_value
+40 ui_present 41 ui_closed。参数按序进 r0..r5, str 参数(button/label/checkbox 标签、
+set_text)在 VM 侧读 0 结尾 UTF-8 解码。
+
+**前端同步**: typecheck UI_SIG(参数个数+str 位置; ui_clicked/ui_checked/ui_closed 返回 bool,
+其余 i32); codegen UI_TRAPS+UI_STR_POS 发射参数进寄存器后 TRAP; asm.py 对 ui_*
+抛 AsmError(原生后端无 Qt 环境); 两处 _infer_type 签名表同步补 13 个 ui_* 条目。
+
+**运行**: lint.py ui <文件.fl> [--frames N](cmd_ui: 编译→汇编→VM(gfx=UiEngine)→线程跑)。
+组件命令排队不受 VM 速度影响; 程序 while not ui_closed() 轮询循环 + ui_present() 刷帧。
+
+**示例**: examples/ui_calc.fl 计算器——17 个按钮(0-9/C///*/-/+/±/=), 后端纯轮询实现
+完整四则(逐次运算无优先级, 除零保护, 连续运算符只换 op), UI 侧零逻辑。
+
 ## 19. v3.1 小迭代记录（2026-10-04）
 
 1. **字符字面量 `'a'`**：lexer 单引号单字符 → `CHAR` token（字符码），多字符报错提示用双引号；

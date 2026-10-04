@@ -128,6 +128,18 @@ class VM:
         self._check(addr, 1)
         return self.mem[addr]
 
+    def _cstr(self, addr: int) -> str:
+        """读取 0 结尾 UTF-8 字符串(UI 组件文本)。"""
+        out = bytearray()
+        i = addr
+        while i < len(self.mem) and i < addr + 4096:
+            b = self.mem[i]
+            if b == 0:
+                break
+            out.append(b)
+            i += 1
+        return out.decode("utf-8", errors="replace")
+
     def store_byte(self, addr: int, val: int):
         self._check(addr, 1)
         self.mem[addr] = val & 0xFF
@@ -330,6 +342,15 @@ class VM:
                     r = self.gfx.syscall(imm16, regs)
                     if r is not None:
                         regs[rd] = r
+                elif 29 <= imm16 <= 41:
+                    # 纯 UI 库系统调用(TRAP 29-41): 组件创建/状态读写/事件轮询。
+                    # 文本参数(button/label/checkbox 标签、set_text)在 VM 侧读内存解码,
+                    # 引擎只接收解码后的 str —— 引擎不碰 VM 内存。
+                    if self.gfx is None:
+                        raise VMError(f"UI 内置(TRAP {imm16})只能在 ui 模式下使用 @pc={old_pc:#06x}")
+                    r = self._ui_call(imm16, regs)
+                    if r is not None:
+                        regs[rd] = r
                 else:
                     raise VMError(f"运行时陷阱: 未定义陷阱 {imm16} @pc={old_pc:#06x}")
             elif name == "HLT":
@@ -342,6 +363,37 @@ class VM:
             raise VMError(f"{name} 执行异常 @pc={old_pc:#06x}: {e}")
         self.steps += 1
         return asm if trace else ""
+
+    def _ui_call(self, code, regs):
+        """UI TRAP 分发: 字符串参数在此读内存解码后传给引擎。"""
+        eng = self.gfx
+        if code == 29:
+            return eng.ui_window(regs[0], regs[1])
+        if code == 30:
+            return eng.ui_button(regs[0], regs[1], regs[2], regs[3], self._cstr(regs[4]))
+        if code == 31:
+            return eng.ui_label(regs[0], regs[1], self._cstr(regs[2]))
+        if code == 32:
+            return eng.ui_slider(regs[0], regs[1], regs[2], regs[3], regs[4], regs[5])
+        if code == 33:
+            return eng.ui_progress(regs[0], regs[1], regs[2], regs[3])
+        if code == 34:
+            return eng.ui_checkbox(regs[0], regs[1], self._cstr(regs[2]), regs[3])
+        if code == 35:
+            return eng.ui_clicked(regs[0])
+        if code == 36:
+            return eng.ui_value(regs[0])
+        if code == 37:
+            return eng.ui_checked(regs[0])
+        if code == 38:
+            return eng.ui_set_text(regs[0], self._cstr(regs[1]))
+        if code == 39:
+            return eng.ui_set_value(regs[0], regs[1])
+        if code == 40:
+            return eng.ui_present()
+        if code == 41:
+            return eng.ui_closed()
+        return 0
 
     def run(self, max_steps: int = None, trace: bool = False, stats: bool = False):
         while not self.halted:

@@ -43,7 +43,7 @@ from parser import Parser, ParseError
 from typecheck import TypeChecker, TypeCheckError
 from codegen import CodeGen
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"
 
 
 def parse_program(src: str):
@@ -159,6 +159,34 @@ def cmd_gfx(args):
     return vm.exit_code
 
 
+def cmd_ui(args):
+    """ui <文件.fl> [--frames N]: 以纯 UI 库模式运行(组件渲染交给 Qt, 计算全在后端)。"""
+    src = open(args.file, encoding="utf-8").read()
+    asm_text = _compile_or_die(src)
+    try:
+        image, _symbols = assemble(asm_text)
+    except AsmError as e:
+        print(f"汇编错误: {e}", file=sys.stderr)
+        return 2
+    import threading
+    from flint_ui import UiEngine
+    eng = UiEngine()
+    vm = VM(image, gfx=eng)
+    vm_done = threading.Event()
+    t = threading.Thread(target=lambda: (vm.run(trace=args.trace, stats=args.stats), vm_done.set()),
+                         daemon=True)
+    t.start()
+    try:
+        eng.run_app(max_frames=args.frames, vm_done=vm_done)
+    except Exception as e:
+        print(f"UI 引擎错误: {e}", file=sys.stderr)
+        return 3
+    t.join(timeout=5)
+    sys.stdout.buffer.write(vm.output)
+    sys.stdout.buffer.flush()
+    return vm.exit_code
+
+
 def cmd_native(args):
     from asm import build as asm_build, AsmError
     out = args.output or os.path.splitext(args.file)[0]
@@ -216,10 +244,10 @@ def _parse_args(argv):
 def main(argv=None):
     argv = list(argv) if argv is not None else sys.argv
     if len(argv) < 3:
-        print("用法: python3 flint.py <run|asm|native> <文件.fl> [--native] [--input 文件] [-o out] [--trace] [--stats]\n  native/--native = x86-64 汇编后端(不再经 C)")
+        print("用法: python3 flint.py <run|asm|native|gfx|ui> <文件.fl> [--native] [--input 文件] [-o out] [--trace] [--stats]\n  native/--native = x86-64 汇编后端(不再经 C); gfx = 2D 引擎; ui = 纯 UI 库")
         return 1
     cmd = argv[1]
-    if cmd not in ("run", "asm", "native", "gfx"):
+    if cmd not in ("run", "asm", "native", "gfx", "ui"):
         print(f"未知命令: {cmd}", file=sys.stderr)
         return 1
     args = _parse_args(argv)
@@ -229,6 +257,8 @@ def main(argv=None):
         return cmd_asm(args)
     if cmd == "gfx":
         return cmd_gfx(args)
+    if cmd == "ui":
+        return cmd_ui(args)
     return cmd_native(args)
 
 

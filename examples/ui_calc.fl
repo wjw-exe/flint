@@ -1,0 +1,85 @@
+# ui_calc.fl — Flint 纯 UI 库示例: 计算器
+# 哲学: UI 只负责按钮与显示(组件), 一切计算由后端(本文件)完成。
+# 运行: py flint.py ui examples/ui_calc.fl   (或打包后的 flint.exe ui ...)
+
+def main() -> i32:
+    ui_window(340, 290)
+
+    # ---------- UI: 显示 + 17 个组件按钮 (全部由引擎渲染) ----------
+    disp = ui_label(15, 15, "0")
+
+    ids: list[i32; 17] = []   # 0-9 数字; 10=C 11=/ 12=* 13=- 14=+ 15=+/- 16==
+    ids[0] = ui_button(15, 195, 70, 34, "0")
+    n: i32 = 1
+    while n <= 9:            # 1-9 三行三列 (Flint 一行一个语句, 不跨行)
+        ids[n] = ui_button(15 + (n - 1) % 3 * 80, 60 + (n - 1) // 3 * 45, 70, 34, str(n))
+        n += 1
+    ids[10] = ui_button(255, 60, 70, 34, "C")
+    ids[11] = ui_button(255, 105, 70, 34, "/")
+    ids[12] = ui_button(255, 150, 70, 34, "*")
+    ids[13] = ui_button(255, 195, 70, 34, "-")
+    ids[14] = ui_button(175, 195, 70, 34, "+")
+    ids[15] = ui_button(95, 195, 70, 34, "+/-")
+    ids[16] = ui_button(175, 240, 70, 34, "=")
+
+    # ---------- 后端: 状态与计算 (UI 引擎完全不知道这些) ----------
+    acc: i32 = 0
+    op: i32 = 0              # 0=无 1=+ 2=- 3=* 4=/
+    cur: i32 = 0
+    fresh: i32 = 1           # 1 = 下一个数字是新输入
+
+    while not ui_closed():
+        ui_present()
+        i: i32 = 0
+        while i <= 16:
+            if ui_clicked(ids[i]):        # 边沿触发: 只在这一帧返回 1
+                if i <= 9:                # 数字
+                    if fresh == 1:
+                        cur = i
+                        fresh = 0
+                    else:
+                        cur = cur * 10 + i
+                    ui_set_text(disp, str(cur))
+                elif i == 10:             # C 清空
+                    acc = 0
+                    op = 0
+                    cur = 0
+                    fresh = 1
+                    ui_set_text(disp, "0")
+                elif i == 15:             # +/- 取负
+                    cur = -cur
+                    ui_set_text(disp, str(cur))
+                elif i == 16:             # = 结算
+                    if op == 1:
+                        acc = acc + cur
+                    elif op == 2:
+                        acc = acc - cur
+                    elif op == 3:
+                        acc = acc * cur
+                    elif op == 4:
+                        if cur != 0:
+                            acc = acc // cur   # 除零保护(Flint 除零是 TRAP)
+                    op = 0
+                    cur = acc
+                    fresh = 1
+                    ui_set_text(disp, str(acc))
+                else:                     # 运算符 / * - +
+                    if op == 0:
+                        acc = cur
+                    elif fresh == 0:      # 连续运算符只换 op, 不重复计算
+                        if op == 1:
+                            acc = acc + cur
+                        elif op == 2:
+                            acc = acc - cur
+                        elif op == 3:
+                            acc = acc * cur
+                        elif op == 4:
+                            if cur != 0:
+                                acc = acc // cur
+                            else:
+                                acc = 0
+                    op = i - 10           # 11→1 12→2 13→3 14→4
+                    fresh = 1
+                    ui_set_text(disp, str(acc))
+            i += 1
+    return 0
